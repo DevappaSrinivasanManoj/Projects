@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Sentiment Analysis</h1>
+
+        <div class="api-key-container">
+            <label for="api-key">API Key:</label>
+            <input type="text" id="api-key" placeholder="Enter your personal API key to boost your quota, or proceed with our default key.">
+            <a href="https://rapidapi.com/devappasmanoj/api/sentiment_analysis6/playground/apiendpoint_f06dce0f-5723-4283-8041-15cd72d1d9d8" target="_blank">Get your own API key</a>
+        </div>
+
+        <div class="comment-container">
+            <h2>Analyze a single comment</h2>
+            <textarea id="comment-input" placeholder="Enter your comment here..."></textarea>
+            <button id="analyze-comment-btn">Analyze</button>
+            <div id="comment-result"></div>
+        </div>
+
+        <div class="csv-container">
+            <h2>Analyze comments from a CSV file</h2>
+            <input type="file" id="csv-file-input" accept=".csv">
+            <button id="analyze-csv-btn">Analyze CSV</button>
+            <div id="csv-result"></div>
+        </div>
+    </div>
+
+    
+    <script src="https://unpkg.com/papaparse@5.3.0/papaparse.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

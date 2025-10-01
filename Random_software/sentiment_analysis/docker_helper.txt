@@ -1,0 +1,79 @@
+To pull the image
+docker pull python:3.11-slim
+
+
+1. Start the Docker container:
+
+
+docker run -it --rm -p 5000:5000 -v "%cd%":/app -w /app python:3.11-slim bash
+
+This opens the terminal of the container right in the cmd window, in that do the below.
+
+2. Inside the container, install the dependencies:
+
+pip install -r requirements.txt
+
+
+3. Run the API:
+
+python3 app.py
+
+
+The API will then be available at http://localhost:5000.
+
+Here's how you can interact with the endpoints:
+
+
+Use the below curl in postman
+
+curl --location 'http://localhost:5000/predict' \
+--header 'Content-Type: application/json' \
+--data '{
+    "comments": [
+        "This is amazing",
+        "This is bad",
+        "This is not so good"
+    ]
+}
+'
+
+
+Till above for just running it. Now we have to deploy a prod version, so do the below
+
+pip install gunicorn (Not needed second time as this is added in requirements.txt)
+
+This runs the prod server
+
+gunicorn --workers 4 --bind 0.0.0.0:5000 app:app
+
+After this, the same curl as above works here.
+
+Have deployed the API in render server
+https://render.com/
+
+Below is the curl for the API
+
+curl --location 'https://sentiment-analysis-api-x13f.onrender.com/predict' \
+--header 'Content-Type: application/json' \
+--data '{
+    "comments": [
+        "This is amazing",
+        "This is bad",
+        "This is not so good",
+        "I love this",
+        "I like this"
+    ]
+}
+'
+
+
+Below is the curl from the gateway of RapidAPI.
+
+curl --location 'https://sentiment_analysis6.p.rapidapi.com/predict' \
+--header 'Content-Type: application/json' \
+--header 'x-rapidapi-key: 27c6272b78msh294c9b43f2e2ff3p194cc0jsn8eeabace6d7c' \
+--data '{"comments":["This is amazing","This is bad"]}'
+
+https://rapidapi.com/devappasmanoj/api/sentiment_analysis6 : API specs
+
+https://rapidapi.com/devappasmanoj/api/sentiment_analysis6/playground/apiendpoint_f06dce0f-5723-4283-8041-15cd72d1d9d8

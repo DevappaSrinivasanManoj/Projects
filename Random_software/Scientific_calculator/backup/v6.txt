@@ -1,0 +1,166 @@
+import math
+import sympy as sp
+import ipywidgets as widgets
+from IPython.display import display
+
+# --- Global State ---
+calc_state = {
+    "expression": "",
+    "currentFunction": "",
+    "result": "",
+    "equation_mode": False
+}
+
+# --- Display Widgets ---
+display_style = "text-align:right; font-size:32px; color:white; background:#1a1a1a; padding:10px; border-radius:8px; min-height:45px;"
+
+expression_display = widgets.HTML(value=f"<div style='{display_style}'>{calc_state['expression']}</div>")
+result_display = widgets.HTML(value=f"<div style='{display_style}'>{calc_state['result']}</div>")
+
+# --- Equation Solver UI Elements ---
+equation_dropdown = widgets.Dropdown(
+    options=[
+        ("Select", ""), 
+        ("2 Variables (x, y)", "2var"), 
+        ("3 Variables (x, y, z)", "3var"),
+        ("Quadratic (ax² + bx + c = 0)", "quad"),
+        ("Cubic (ax³ + bx² + cx + d = 0)", "cubic")
+    ],
+    description="Equation Solver:",
+    style={'description_width': 'initial'}
+)
+
+solve_button = widgets.Button(description="Solve", button_style="primary")
+equation_container = widgets.VBox([])  # Holds input fields for coefficients
+equation_result_display = widgets.HTML(value="")  # Solution display
+
+def update_display():
+    expr = f"{calc_state['currentFunction']}({calc_state['expression']})" if calc_state["currentFunction"] else calc_state["expression"]
+    expression_display.value = f"<div style='{display_style}'>{expr if expr else '&nbsp;'}</div>"
+    result_display.value = f"<div style='{display_style}'>{calc_state['result'] if calc_state['result'] else '&nbsp;'}</div>"
+
+# --- Clear function ---
+def clear_calc(b=None):
+    calc_state["expression"] = ""
+    calc_state["currentFunction"] = ""
+    calc_state["result"] = ""
+    calc_state["equation_mode"] = False
+    update_display()
+    equation_dropdown.value = ""  # Reset dropdown
+    equation_container.children = []  # Clear input table
+    equation_result_display.value = ""  # Clear results
+
+# --- Equation Solver ---
+def generate_equation_inputs(change):
+    """Generates input fields for the selected equation type."""
+    selection = change['new']
+    if not selection:
+        equation_container.children = []
+        return
+    
+    input_grid = []
+    if selection in ["2var", "3var"]:
+        num_vars = 2 if selection == "2var" else 3
+        headers = ["x", "y", "z"][:num_vars] + ["="]
+        for row in range(num_vars):
+            row_inputs = [widgets.FloatText(value=0, layout=widgets.Layout(width='60px')) for _ in range(num_vars + 1)]
+            input_grid.append(row_inputs)
+    
+    elif selection == "quad":
+        headers = ["a (x²)", "b (x)", "c (= 0)"]
+        input_grid = [[widgets.FloatText(value=0, layout=widgets.Layout(width='80px')) for _ in range(3)]]
+    
+    elif selection == "cubic":
+        headers = ["a (x³)", "b (x²)", "c (x)", "d (= 0)"]
+        input_grid = [[widgets.FloatText(value=0, layout=widgets.Layout(width='80px')) for _ in range(4)]]
+
+    # Convert to UI elements
+    grid_ui = [widgets.HBox([widgets.Label(value=h, layout=widgets.Layout(width='80px')) for h in headers])]  # Column headers
+    for row in input_grid:
+        grid_ui.append(widgets.HBox(row))
+    
+    equation_container.children = grid_ui
+    solve_button.on_click(lambda b: solve_equations(selection, input_grid))
+
+def solve_equations(selection, input_grid):
+    """Solves equations based on user selection and input values."""
+    try:
+        if selection in ["2var", "3var"]:
+            num_vars = 2 if selection == "2var" else 3
+            symbols = sp.symbols('x y z')[:num_vars]
+            equations = []
+
+            for row in input_grid:
+                lhs = sum(coeff.value * var for coeff, var in zip(row[:-1], symbols))
+                rhs = row[-1].value
+                equations.append(sp.Eq(lhs, rhs))
+
+            solution = sp.solve(equations, symbols)
+        
+        elif selection == "quad":
+            a, b, c = [cell.value for cell in input_grid[0]]
+            x = sp.Symbol('x')
+            solution = sp.solve(a*x**2 + b*x + c, x)
+
+        elif selection == "cubic":
+            a, b, c, d = [cell.value for cell in input_grid[0]]
+            x = sp.Symbol('x')
+            solution = sp.solve(a*x**3 + b*x**2 + c*x + d, x)
+
+        # Format result
+        if solution:
+            result_text = ", ".join(f"x = {sol}" for sol in solution)
+        else:
+            result_text = "No real solutions"
+
+        equation_result_display.value = f"<div style='{display_style}'>{result_text}</div>"
+    
+    except Exception:
+        equation_result_display.value = f"<div style='{display_style}'>Error: Invalid input</div>"
+
+# --- Create Buttons ---
+btn_clear = widgets.Button(description="C", button_style="warning")
+btn_back = widgets.Button(description="⌫", button_style="warning")
+
+btn_sin = widgets.Button(description="sin", button_style="info")
+btn_log = widgets.Button(description="log", button_style="info")
+
+btn_clear.on_click(clear_calc)
+btn_back.on_click(lambda b: calc_state.update({"expression": calc_state["expression"][:-1]}) or update_display())
+btn_sin.on_click(lambda b: calc_state.update({"currentFunction": "sin", "expression": "", "result": ""}) or update_display())
+btn_log.on_click(lambda b: calc_state.update({"currentFunction": "log", "expression": "", "result": ""}) or update_display())
+
+# **TOP ROW**: Clear, Equation Solver Dropdown, Solve Button
+top_row = widgets.HBox([btn_clear, equation_dropdown, solve_button])
+
+# **SECOND ROW**: Backspace, sin, log
+second_row = widgets.HBox([btn_back, btn_sin, btn_log])
+
+# Bottom grid: numbers and basic operators
+button_descriptions = [
+    "7", "8", "9", "/",
+    "4", "5", "6", "*",
+    "1", "2", "3", "-",
+    "0", ".", "=", "+"
+]
+
+num_buttons = []
+for desc in button_descriptions:
+    btn = widgets.Button(description=desc)
+    if desc == "=":
+        btn.on_click(lambda b: calc_state.update({"result": str(eval(calc_state["expression"]))}) or update_display())
+    else:
+        btn.on_click(lambda b, d=desc: calc_state.update({"expression": calc_state["expression"] + d}) or update_display())
+    num_buttons.append(btn)
+
+grid = widgets.GridBox(num_buttons, layout=widgets.Layout(grid_template_columns="repeat(4, 1fr)", grid_gap="5px"))
+
+# Attach dropdown event
+equation_dropdown.observe(generate_equation_inputs, names="value")
+
+# --- Assemble UI ---
+equation_solver_ui = widgets.VBox([equation_container, equation_result_display])
+calc_ui = widgets.VBox([expression_display, result_display, top_row, second_row, grid, equation_solver_ui])
+
+update_display()
+display(calc_ui)

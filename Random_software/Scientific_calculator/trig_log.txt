@@ -1,0 +1,271 @@
+# @title Default title text
+# Install ipywidgets if needed (uncomment if necessary)
+# !pip install ipywidgets
+# !jupyter nbextension enable --py widgetsnbextension
+
+import ipywidgets as widgets
+from ipywidgets import VBox, HBox, Tab, Layout
+import math
+from IPython.display import display
+
+####################################
+# Tab 1: Trigonometric Functions
+####################################
+
+# Dropdown for selecting trigonometric function
+trig_function_dropdown = widgets.Dropdown(
+    options=["sin", "cos", "tan", "cosec", "sec", "cot"],
+    description="Function:",
+    style={'description_width': '120px'},
+    layout=Layout(width='300px')
+)
+
+# Radio buttons for angle unit (Radians or Degrees)
+angle_unit_radio = widgets.RadioButtons(
+    options=["Radians", "Degrees"],
+    value="Degrees",
+    description="Angle Unit:",
+    style={'description_width': '120px'},
+    layout=Layout(width='300px')
+)
+
+# Input widget for the angle
+angle_input = widgets.FloatText(
+    description="Angle:",
+    value=0.0,
+    style={'description_width': '120px'},
+    layout=Layout(width='300px')
+)
+
+# Button to perform calculation
+trig_calc_button = widgets.Button(
+    description="Calculate",
+    button_style="success",
+    layout=Layout(width='150px')
+)
+
+# Output widget for trigonometric results
+trig_output = widgets.Output()
+
+def calculate_trig(b):
+    trig_output.clear_output()
+    with trig_output:
+        try:
+            func = trig_function_dropdown.value
+            angle = angle_input.value
+            unit = angle_unit_radio.value
+            # Convert degrees to radians if needed
+            if unit == "Degrees":
+                angle = math.radians(angle)
+            # Compute the desired trigonometric function
+            if func == "sin":
+                result = math.sin(angle)
+            elif func == "cos":
+                result = math.cos(angle)
+            elif func == "tan":
+                result = math.tan(angle)
+            elif func == "cosec":
+                s = math.sin(angle)
+                if s == 0:
+                    raise ValueError("Cosecant undefined when sin(angle)=0")
+                result = 1/s
+            elif func == "sec":
+                c = math.cos(angle)
+                if c == 0:
+                    raise ValueError("Secant undefined when cos(angle)=0")
+                result = 1/c
+            elif func == "cot":
+                t = math.tan(angle)
+                if t == 0:
+                    raise ValueError("Cotangent undefined when tan(angle)=0")
+                result = 1/t
+            print(f"{func}({angle_input.value} {unit}) = {result}")
+        except Exception as e:
+            print("Error:", e)
+
+trig_calc_button.on_click(calculate_trig)
+
+trig_ui = VBox([
+    trig_function_dropdown,
+    angle_unit_radio,
+    angle_input,
+    trig_calc_button,
+    trig_output
+], layout=Layout(margin='10px 0px'))
+
+####################################
+# Tab 2: Logarithms
+####################################
+
+# Dropdown for selecting logarithm type
+log_type_dropdown = widgets.Dropdown(
+    options=[("log base 10", "log10"), ("Natural log (ln)", "ln"), ("Log with custom base", "log_custom")],
+    description="Log Type:",
+    style={'description_width': '150px'},
+    layout=Layout(width='350px')
+)
+
+# Input widget for the value to take log of
+log_value_input = widgets.FloatText(
+    description="Value:",
+    value=1.0,
+    style={'description_width': '150px'},
+    layout=Layout(width='300px')
+)
+
+# Input widget for custom base (only visible if custom base is selected)
+log_custom_base_input = widgets.FloatText(
+    description="Base:",
+    value=10.0,
+    style={'description_width': '150px'},
+    layout=Layout(width='300px')
+)
+
+# Function to update visibility of the custom base input
+def update_log_inputs(*args):
+    if log_type_dropdown.value == "log_custom":
+        log_custom_base_input.layout.display = 'block'
+    else:
+        log_custom_base_input.layout.display = 'none'
+
+log_type_dropdown.observe(update_log_inputs, names="value")
+update_log_inputs()
+
+# Button for log calculation
+log_calc_button = widgets.Button(
+    description="Calculate",
+    button_style="success",
+    layout=Layout(width='150px')
+)
+
+# Output widget for logarithm results
+log_output = widgets.Output()
+
+def calculate_log(b):
+    log_output.clear_output()
+    with log_output:
+        try:
+            log_type = log_type_dropdown.value
+            x = log_value_input.value
+            if x <= 0:
+                raise ValueError("Logarithm undefined for non-positive values")
+            if log_type == "log10":
+                result = math.log10(x)
+                print(f"log10({x}) = {result}")
+            elif log_type == "ln":
+                result = math.log(x)
+                print(f"ln({x}) = {result}")
+            else:
+                base = log_custom_base_input.value
+                if base <= 0 or base == 1:
+                    raise ValueError("Base must be positive and not equal to 1")
+                result = math.log(x, base)
+                print(f"log base {base} of {x} = {result}")
+        except Exception as e:
+            print("Error:", e)
+
+log_calc_button.on_click(calculate_log)
+
+log_ui = VBox([
+    log_type_dropdown,
+    log_value_input,
+    log_custom_base_input,
+    log_calc_button,
+    log_output
+], layout=Layout(margin='10px 0px'))
+
+####################################
+# Tab 3: Inverse Trigonometric Functions
+####################################
+
+# Dropdown for selecting inverse trigonometric function
+inv_trig_dropdown = widgets.Dropdown(
+    options=[("arcsin", "arcsin"), ("arccos", "arccos"), ("arctan", "arctan"),
+             ("arccosec", "arccosec"), ("arcsec", "arcsec"), ("arccot", "arccot")],
+    description="Inverse Function:",
+    style={'description_width': '150px'},
+    layout=Layout(width='350px')
+)
+
+# Radio buttons for output unit (Radians or Degrees)
+inv_angle_unit_radio = widgets.RadioButtons(
+    options=["Radians", "Degrees"],
+    value="Degrees",
+    description="Result Unit:",
+    style={'description_width': '150px'},
+    layout=Layout(width='300px')
+)
+
+# Input widget for the value for which to compute the inverse function
+inv_value_input = widgets.FloatText(
+    description="Value:",
+    value=0.0,
+    style={'description_width': '150px'},
+    layout=Layout(width='300px')
+)
+
+# Button for inverse trig calculation
+inv_trig_calc_button = widgets.Button(
+    description="Calculate",
+    button_style="success",
+    layout=Layout(width='150px')
+)
+
+# Output widget for inverse trig results
+inv_trig_output = widgets.Output()
+
+def calculate_inv_trig(b):
+    inv_trig_output.clear_output()
+    with inv_trig_output:
+        try:
+            func = inv_trig_dropdown.value
+            x = inv_value_input.value
+            result = None
+            if func == "arcsin":
+                if x < -1 or x > 1:
+                    raise ValueError("arcsin undefined for |x|>1")
+                result = math.asin(x)
+            elif func == "arccos":
+                if x < -1 or x > 1:
+                    raise ValueError("arccos undefined for |x|>1")
+                result = math.acos(x)
+            elif func == "arctan":
+                result = math.atan(x)
+            elif func == "arccosec":
+                if x == 0 or abs(x) < 1:
+                    raise ValueError("arccosec undefined for |x|<1 or x=0")
+                result = math.asin(1/x)
+            elif func == "arcsec":
+                if x == 0 or abs(x) < 1:
+                    raise ValueError("arcsec undefined for |x|<1 or x=0")
+                result = math.acos(1/x)
+            elif func == "arccot":
+                # Using identity: arccot(x) = π/2 - arctan(x)
+                result = math.pi/2 - math.atan(x)
+            # Convert result to degrees if requested
+            if inv_angle_unit_radio.value == "Degrees":
+                result = math.degrees(result)
+            print(f"{func}({x}) = {result} {inv_angle_unit_radio.value}")
+        except Exception as e:
+            print("Error:", e)
+
+inv_trig_calc_button.on_click(calculate_inv_trig)
+
+inv_trig_ui = VBox([
+    inv_trig_dropdown,
+    inv_angle_unit_radio,
+    inv_value_input,
+    inv_trig_calc_button,
+    inv_trig_output
+], layout=Layout(margin='10px 0px'))
+
+####################################
+# Assemble Tabs
+####################################
+
+tab = Tab(children=[trig_ui, log_ui, inv_trig_ui])
+tab.set_title(0, "Trigonometry")
+tab.set_title(1, "Logarithms")
+tab.set_title(2, "Inverse Trigonometry")
+display(tab)
+

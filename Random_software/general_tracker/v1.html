@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>General Streak Tracker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 90%;
+            max-width: 550px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            letter-spacing: 1.5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .main-action {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .action-btn {
+            background: linear-gradient(90deg, #16a085, #27ae60);
+            color: #fff;
+            padding: 15px 30px;
+            border-radius: 50px;
+            border: none;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .action-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .streak {
+            margin: 25px 0;
+            font-size: 1.8em;
+            text-align: center;
+            color: #f1c40f;
+            font-weight: bold;
+        }
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 25px;
+        }
+        .file-label, .export-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .file-label:hover, .export-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        input[type="file"] { display: none; }
+        #heatmap { margin: 30px 0; display: flex; justify-content: center; }
+        .collapsible {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            cursor: pointer;
+            padding: 12px 20px;
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            text-align: left;
+            outline: none;
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .collapsible-content {
+            padding: 15px;
+            display: none;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 0 0 8px 8px;
+        }
+        .history-list {
+            list-style: none; padding: 0; margin: 0;
+            max-height: 250px; overflow-y: auto;
+        }
+        .history-list li {
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+            padding: 12px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="trackerTitle"></h1>
+        <div class="main-action">
+            <button class="action-btn" id="actionBtn"></button>
+        </div>
+        <div class="streak" id="streak"></div>
+        <div id="heatmap"></div>
+        <div class="actions">
+            <button class="export-btn" id="exportBtn">Export Data</button>
+            <label for="importFile" class="file-label">Import Data</label>
+            <input type="file" id="importFile" accept=".json">
+        </div>
+        <button class="collapsible" id="toggleHistory">+ View History</button>
+        <div class="collapsible-content" id="historyContent">
+            <ul class="history-list" id="historyList"></ul>
+        </div>
+    </div>
+
+    <script>
+    // ----- CONFIGURATION -----
+    const TRACKER_NAME = "No Fap Tracker";
+    const EVENT_NAME = "No Fap Day";
+    const DB_NAME = "no_fap_tracker_db_v2"; // Use a unique name for each tracker
+    const HISTORY_LIMIT_DAYS = 90;
+    // ------------------------
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const STORE_NAME = 'events';
+        const DB_VERSION = 1;
+        const STREAK_KEY = `${DB_NAME}_streak`;
+        const LAST_MARKED_KEY = `${DB_NAME}_lastMarked`;
+        let db;
+
+        document.getElementById('trackerTitle').textContent = TRACKER_NAME;
+        document.getElementById('actionBtn').textContent = `Mark Today as a ${EVENT_NAME}`;
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = e => e.target.result.createObjectStore(STORE_NAME, { keyPath: 'date' });
+                request.onsuccess = e => { db = e.target.result; resolve(db); };
+                request.onerror = e => reject(e);
+            });
+        }
+
+        function getStore(mode) {
+            return db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
+        }
+
+        async function addEvent(record) {
+            await openDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(record);
+            await tx.complete;
+            await trimOldRecords();
+        }
+
+        async function trimOldRecords() {
+            await openDB();
+            const store = getStore('readwrite');
+            const records = await new Promise(r => store.getAll().onsuccess = e => r(e.target.result));
+            if (records.length > HISTORY_LIMIT_DAYS) {
+                records.sort((a, b) => new Date(a.date) - new Date(b.date));
+                const recordsToDelete = records.slice(0, records.length - HISTORY_LIMIT_DAYS);
+                for (const rec of recordsToDelete) {
+                    await new Promise(r => getStore('readwrite').delete(rec.date).onsuccess = r);
+                }
+            }
+        }
+
+        function getAllEvents() {
+            return new Promise(async (resolve) => {
+                await openDB();
+                const request = getStore('readonly').getAll();
+                request.onsuccess = e => resolve(e.target.result.sort((a, b) => new Date(b.date) - new Date(a.date)));
+            });
+        }
+
+        function getTodayISO() {
+            const d = new Date();
+            return new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        }
+
+        async function updateUI() {
+            const records = await getAllEvents();
+            updateHistoryList(records);
+            updateStreak();
+            renderHeatmap(records);
+        }
+
+        function updateHistoryList(records) {
+            const list = document.getElementById('historyList');
+            list.innerHTML = records.map(r => `<li>${new Date(r.date + 'T00:00:00').toLocaleDateString()} - ${r.type}</li>`).join('');
+        }
+
+        function updateStreak() {
+            const streakEl = document.getElementById('streak');
+            const streakData = JSON.parse(localStorage.getItem(STREAK_KEY) || '{"count": 0, "lastMarked": ""}');
+            streakEl.textContent = `Current Streak: ${streakData.count} day${streakData.count !== 1 ? 's' : ''}`;
+        }
+
+        function calculateNewStreak() {
+            const today = getTodayISO();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayISO = yesterday.toISOString().split('T')[0];
+
+            let streakData = JSON.parse(localStorage.getItem(STREAK_KEY) || '{"count": 0, "lastMarked": ""}');
+
+            if (streakData.lastMarked === today) {
+                // Already marked today, do nothing.
+                return;
+            } else if (streakData.lastMarked === yesterdayISO) {
+                // Consecutive day
+                streakData.count++;
+            } else {
+                // Streak is broken
+                streakData.count = 1;
+            }
+            streakData.lastMarked = today;
+            localStorage.setItem(STREAK_KEY, JSON.stringify(streakData));
+        }
+
+        function renderHeatmap(records) {
+            const heatmap = document.getElementById('heatmap');
+            const activitySet = new Set(records.map(r => r.date));
+            const today = new Date();
+            const endDate = new Date(today);
+            endDate.setDate(today.getDate() + (6 - today.getDay()));
+
+            const startDate = new Date(endDate);
+            startDate.setDate(endDate.getDate() - (HISTORY_LIMIT_DAYS - 1));
+            startDate.setDate(startDate.getDate() - startDate.getDay());
+
+            let html = '<table style="border-spacing:3px; margin:auto;">';
+            for (let i = 0; i < 7; i++) {
+                html += '<tr>';
+                for (let j = 0; j < Math.ceil(HISTORY_LIMIT_DAYS / 7) + 1; j++) {
+                    const cellDate = new Date(startDate);
+                    cellDate.setDate(startDate.getDate() + (j * 7) + i);
+                    if (cellDate > endDate || cellDate < new Date(endDate.getTime() - (HISTORY_LIMIT_DAYS * 24 * 60 * 60 * 1000))) continue;
+
+                    const iso = cellDate.toISOString().slice(0, 10);
+                    let color = 'rgba(255,255,255,0.1)';
+                    if (cellDate <= today && activitySet.has(iso)) {
+                        color = '#27ae60';
+                    }
+                    html += `<td title="${iso}" style="width:20px;height:20px;border-radius:4px;background:${color};"></td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</table>';
+            heatmap.innerHTML = html;
+        }
+
+        document.getElementById('actionBtn').addEventListener('click', async () => {
+            const today = getTodayISO();
+            const record = { date: today, type: EVENT_NAME };
+            await addEvent(record);
+            calculateNewStreak();
+            updateUI();
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', async () => {
+            const records = await getAllEvents();
+            const streakData = localStorage.getItem(STREAK_KEY);
+            const data = {
+                config: { TRACKER_NAME, EVENT_NAME, DB_NAME },
+                streak: JSON.parse(streakData),
+                records
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${DB_NAME}_backup.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('importFile').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if (!data.records || !data.config || data.config.DB_NAME !== DB_NAME) {
+                        alert(`Import failed! This file is not for the "${TRACKER_NAME}".`);
+                        return;
+                    }
+                    if (data.streak) {
+                        localStorage.setItem(STREAK_KEY, JSON.stringify(data.streak));
+                    }
+                    await openDB();
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    store.clear();
+                    for (const rec of data.records) {
+                        store.put(rec);
+                    }
+                    tx.oncomplete = updateUI;
+                } catch (err) {
+                    alert("Import failed. Invalid file format.");
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        const histBtn = document.getElementById('toggleHistory');
+        const histContent = document.getElementById('historyContent');
+        histBtn.addEventListener('click', () => {
+            const isVisible = histContent.style.display === 'block';
+            histContent.style.display = isVisible ? 'none' : 'block';
+            histBtn.textContent = (isVisible ? '+' : '-') + " View History";
+        });
+
+        openDB().then(updateUI);
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetrTrack - Meter Reading Tracker</title>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3a0ca3;
+            --accent-color: #4cc9f0;
+            --success-color: #2ec4b6;
+            --warning-color: #ff9f1c;
+            --danger-color: #e71d36;
+            --dark-color: #1a1a2e;
+            --light-color: #f8f9fa;
+            --gray-color: #6c757d;
+            --border-radius: 12px;
+            --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark-color);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: var(--box-shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .app-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        main {
+            flex: 1;
+            padding: 1rem;
+            max-width: 100%;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: var(--transition);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+            -webkit-appearance: none;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            text-align: center;
+            -webkit-appearance: none;
+        }
+
+        .btn:hover {
+            background-color: var(--secondary-color);
+        }
+
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn-success:hover {
+            background-color: #25a599;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background-color: #c91b2e;
+        }
+
+        .btn-warning {
+            background-color: var(--warning-color);
+        }
+
+        .btn-warning:hover {
+            background-color: #e08c19;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .btn-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .meter-list {
+            margin-top: 0.5rem;
+        }
+
+        .meter-item {
+            padding: 0.75rem;
+            border: 1px solid #eee;
+            border-radius: var(--border-radius);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .meter-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .meter-info {
+            flex: 1;
+        }
+
+        .meter-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--dark-color);
+        }
+
+        .meter-details {
+            font-size: 0.85rem;
+            color: var(--gray-color);
+        }
+
+        .meter-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--gray-color);
+            transition: var(--transition);
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .action-btn:hover {
+            background-color: #f0f0f0;
+            color: var(--primary-color);
+        }
+
+        .action-btn.delete:hover {
+            color: var(--danger-color);
+        }
+
+        .action-btn.edit:hover {
+            color: var(--warning-color);
+        }
+
+        .reading-list {
+            margin-top: 0.5rem;
+        }
+
+        .reading-item {
+            padding: 0.75rem;
+            border: 1px solid #eee;
+            border-radius: var(--border-radius);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .reading-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .reading-info {
+            flex: 1;
+        }
+
+        .reading-value {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--primary-color);
+        }
+
+        .reading-date {
+            font-size: 0.85rem;
+            color: var(--gray-color);
+        }
+
+        .reading-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 1rem;
+            background-color: white;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--box-shadow);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 0.75rem 0;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 500;
+        }
+
+        .tab.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 0.75rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0.25rem 0;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--gray-color);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-color);
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            color: var(--danger-color);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background-color: white;
+            color: var(--dark-color);
+            padding: 0.75rem 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            max-width: 90%;
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--success-color);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--danger-color);
+        }
+
+        .toast.warning {
+            border-left: 4px solid var(--warning-color);
+        }
+
+        .toast.info {
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast-icon {
+            font-size: 1.25rem;
+        }
+
+        .toast.success .toast-icon {
+            color: var(--success-color);
+        }
+
+        .toast.error .toast-icon {
+            color: var(--danger-color);
+        }
+
+        .toast.warning .toast-icon {
+            color: var(--warning-color);
+        }
+
+        .toast.info .toast-icon {
+            color: var(--primary-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--gray-color);
+        }
+
+        .empty-state-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .theme-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .theme-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px var(--primary-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .dark-mode {
+            --primary-color: #4cc9f0;
+            --secondary-color: #4361ee;
+            --accent-color: #3a0ca3;
+            --dark-color: #f8f9fa;
+            --light-color: #1a1a2e;
+            --gray-color: #adb5bd;
+            background-color: #121212;
+            color: var(--dark-color);
+        }
+
+        .dark-mode .card,
+        .dark-mode .modal-content,
+        .dark-mode .stat-card,
+        .dark-mode .toast,
+        .dark-mode .tabs,
+        .dark-mode .tab:not(.active) {
+            background-color: #1e1e1e;
+            color: var(--dark-color);
+        }
+
+        .dark-mode .meter-item,
+        .dark-mode .reading-item {
+            border-color: #333;
+        }
+
+        .dark-mode .meter-item:hover,
+        .dark-mode .reading-item:hover {
+            background-color: #2a2a2a;
+        }
+
+        .dark-mode .action-btn:hover {
+            background-color: #2a2a2a;
+        }
+
+        .dark-mode input, 
+        .dark-mode select, 
+        .dark-mode textarea {
+            background-color: #2a2a2a;
+            border-color: #444;
+            color: var(--dark-color);
+        }
+
+        .dark-mode .meter-name {
+            color: var(--dark-color);
+        }
+
+        footer {
+            background-color: white;
+            padding: 1rem;
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--gray-color);
+            margin-top: auto;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .dark-mode footer {
+            background-color: #1e1e1e;
+        }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dark-mode .settings-row {
+            border-color: #444;
+        }
+
+        .settings-label {
+            font-weight: 500;
+        }
+
+        .settings-description {
+            font-size: 0.85rem;
+            color: var(--gray-color);
+            margin-top: 0.25rem;
+        }
+
+        .cumulative-info {
+            font-size: 0.85rem;
+            color: var(--success-color);
+            margin-top: 0.25rem;
+        }
+
+        .meter-select-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .meter-select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            background-color: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dark-mode .meter-select {
+            background-color: #2a2a2a;
+            border-color: #444;
+        }
+
+        .meter-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 0 0 var(--border-radius) var(--border-radius);
+            z-index: 10;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .dark-mode .meter-select-dropdown {
+            background-color: #2a2a2a;
+            border-color: #444;
+        }
+
+        .meter-select-option {
+            padding: 0.75rem;
+            cursor: pointer;
+        }
+
+        .meter-select-option:hover {
+            background-color: #f8f9fa;
+        }
+
+        .dark-mode .meter-select-option:hover {
+            background-color: #333;
+        }
+
+        .meter-select-option.selected {
+            background-color: rgba(67, 97, 238, 0.1);
+            color: var(--primary-color);
+        }
+
+        .dark-mode .meter-select-option.selected {
+            background-color: rgba(76, 201, 240, 0.1);
+        }
+
+        .meter-select.active + .meter-select-dropdown {
+            display: block;
+        }
+
+        .add-new-meter-option {
+            border-top: 1px solid #eee;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .dark-mode .add-new-meter-option {
+            border-color: #444;
+        }
+
+        .reading-big-input {
+            font-size: 2rem;
+            text-align: center;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-weight: 600;
+        }
+
+        .meter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .meter-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .meter-unit {
+            font-size: 0.9rem;
+            color: var(--gray-color);
+            font-weight: normal;
+        }
+
+        .meter-total {
+            font-size: 0.9rem;
+            color: var(--success-color);
+            font-weight: 500;
+        }
+
+        .quick-add-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: var(--transition);
+            z-index: 90;
+        }
+
+        .quick-add-btn:hover {
+            background-color: var(--secondary-color);
+            transform: scale(1.05);
+        }
+
+        .back-btn {
+            margin-bottom: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary-color);
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .new-meter-checkbox {
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .new-meter-checkbox input[type="checkbox"] {
+            width: auto;
+            margin-right: 0.5rem;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 576px) {
+            .btn-group {
+                flex-direction: column;
+            }
+            
+            .stats-container {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .modal-content {
+                padding: 1rem;
+            }
+            
+            .card-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .reading-big-input {
+                font-size: 1.75rem;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="app-title">MetrTrack</div>
+    </header>
+
+    <main>
+        <div class="container">
+            <div class="tabs">
+                <div class="tab active" data-tab="meters">My Meters</div>
+                <div class="tab" data-tab="settings">Settings</div>
+            </div>
+
+            <div class="tab-content active" id="meters">
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Meters</div>
+                        <div class="stat-value" id="total-meters">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Readings</div>
+                        <div class="stat-value" id="total-readings">0</div>
+                    </div>
+                </div>
+
+                <div id="meters-list" class="meter-list">
+                    <!-- Meters will be displayed here -->
+                </div>
+            </div>
+
+            <div class="tab-content" id="meter-detail">
+                <div class="back-btn" id="back-to-meters">
+                    ← Back to Meters
+                </div>
+                
+                <div class="card">
+                    <div class="meter-header">
+                        <div>
+                            <div class="meter-title" id="detail-meter-name">Meter Name</div>
+                            <div class="meter-unit" id="detail-meter-unit">Unit</div>
+                        </div>
+                        <div class="meter-total" id="detail-meter-total">Total: 0</div>
+                    </div>
+
+                    <div id="readings-list" class="reading-list">
+                        <!-- Readings will be displayed here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="add-reading">
+                <div class="back-btn" id="back-from-add">
+                    ← Back
+                </div>
+                
+                <div class="card">
+                    <div class="card-title">Add Reading</div>
+                    <div class="meter-header">
+                        <div>
+                            <div class="meter-title" id="add-meter-name">Meter Name</div>
+                            <div class="meter-unit" id="add-meter-unit">Unit</div>
+                        </div>
+                    </div>
+                    
+                    <form id="add-reading-form">
+                        <input type="hidden" id="add-meter-id">
+                        
+                        <div class="form-group">
+                            <label for="reading-value">Reading Value</label>
+                            <input type="number" id="reading-value" class="reading-big-input" step="0.01" placeholder="Enter reading" required>
+                        </div>
+
+                        <div class="new-meter-checkbox">
+                            <input type="checkbox" id="is-new-meter">
+                            <label for="is-new-meter">This is a new meter (starting from 0)</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-block btn-success">Save Reading</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="tab-content" id="settings">
+                <div class="card">
+                    <div class="card-title">App Settings</div>
+                    
+                    <div class="settings-row">
+                        <div>
+                            <div class="settings-label">Dark Mode</div>
+                            <div class="settings-description">Switch between light and dark theme</div>
+                        </div>
+                        <label class="theme-switch">
+                            <input type="checkbox" id="theme-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-row">
+                        <div>
+                            <div class="settings-label">Data Management</div>
+                            <div class="settings-description">Export or import your meter reading data</div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn" id="export-data">Export</button>
+                            <button class="btn" id="import-data">Import</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div>
+                            <div class="settings-label">Add New Meter</div>
+                            <div class="settings-description">Create a new meter to track readings</div>
+                        </div>
+                        <button class="btn" id="add-meter-btn">Add Meter</button>
+                    </div>
+
+                    <div class="settings-row">
+                        <div>
+                            <div class="settings-label">Clear All Data</div>
+                            <div class="settings-description">Delete all your meters and readings (cannot be undone)</div>
+                        </div>
+                        <button class="btn btn-danger" id="clear-data">Clear Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="quick-add-btn" id="quick-add-btn">+</div>
+    </main>
+
+    <!-- Add Meter Modal -->
+    <div class="modal" id="add-meter-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Add New Meter</div>
+                <button class="modal-close" id="add-meter-modal-close">&times;</button>
+            </div>
+            <form id="add-meter-form">
+                <div class="form-group">
+                    <label for="meter-name">Meter Name</label>
+                    <input type="text" id="meter-name" placeholder="E.g., Home Electric Meter, Mountain Bike" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="meter-unit">Unit</label>
+                    <input type="text" id="meter-unit" placeholder="E.g., km, kWh, m³" required>
+                </div>
+
+                <button type="submit" class="btn btn-block">Add Meter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Meter Modal -->
+    <div class="modal" id="edit-meter-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Edit Meter</div>
+                <button class="modal-close" id="edit-meter-modal-close">&times;</button>
+            </div>
+            <form id="edit-meter-form">
+                <input type="hidden" id="edit-meter-id">
+                <div class="form-group">
+                    <label for="edit-meter-name">Meter Name</label>
+                    <input type="text" id="edit-meter-name" placeholder="E.g., Home Electric Meter, Mountain Bike" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-meter-unit">Unit</label>
+                    <input type="text" id="edit-meter-unit" placeholder="E.g., km, kWh, m³" required>
+                </div>
+
+                <button type="submit" class="btn btn-block">Update Meter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Data Modal -->
+    <div class="modal" id="import-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Import Data</div>
+                <button class="modal-close" id="import-modal-close">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="import-file">Select JSON File</label>
+                <input type="file" id="import-file" accept=".json">
+            </div>
+            <div class="form-group">
+                <label>Import Options</label>
+                <div>
+                    <input type="radio" id="import-replace" name="import-option" value="replace" checked>
+                    <label for="import-replace">Replace all existing data</label>
+                </div>
+                <div>
+                    <input type="radio" id="import-merge" name="import-option" value="merge">
+                    <label for="import-merge">Merge with existing data</label>
+                </div>
+            </div>
+            <button class="btn btn-block" id="confirm-import">Import Data</button>
+        </div>
+    </div>
+
+    <!-- Quick Add Meter Select Modal -->
+    <div class="modal" id="quick-add-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Select Meter</div>
+                <button class="modal-close" id="quick-add-modal-close">&times;</button>
+            </div>
+            <div id="quick-meter-list" class="meter-list">
+                <!-- Meters will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal" id="confirm-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="confirm-title">Confirmation</div>
+                <button class="modal-close" id="confirm-modal-close">&times;</button>
+            </div>
+            <p id="confirm-message">Are you sure you want to proceed?</p>
+            <div class="btn-group">
+                <button class="btn btn-danger" id="confirm-yes">Yes</button>
+                <button class="btn" id="confirm-no">No</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <div class="toast-icon" id="toast-icon">✓</div>
+        <div id="toast-message">Operation successful</div>
+    </div>
+
+    <footer>
+        <p>MetrTrack &copy; 2025 | Meter Reading Tracker</p>
+    </footer>
+
+    <script>
+        // Main application logic
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the app
+            const app = new MeterTracker();
+            app.init();
+        });
+
+        class MeterTracker {
+            constructor() {
+                // App state
+                this.meters = [];
+                this.currentTab = 'meters';
+                this.currentMeterId = null;
+                this.confirmCallback = null;
+                
+                // DOM elements
+                this.elements = {
+                    tabs: document.querySelectorAll('.tab'),
+                    tabContents: document.querySelectorAll('.tab-content'),
+                    metersList: document.getElementById('meters-list'),
+                    readingsList: document.getElementById('readings-list'),
+                    quickMeterList: document.getElementById('quick-meter-list'),
+                    totalMeters: document.getElementById('total-meters'),
+                    totalReadings: document.getElementById('total-readings'),
+                    detailMeterName: document.getElementById('detail-meter-name'),
+                    detailMeterUnit: document.getElementById('detail-meter-unit'),
+                    detailMeterTotal: document.getElementById('detail-meter-total'),
+                    addMeterName: document.getElementById('add-meter-name'),
+                    addMeterUnit: document.getElementById('add-meter-unit'),
+                    addMeterId: document.getElementById('add-meter-id'),
+                    addReadingForm: document.getElementById('add-reading-form'),
+                    readingValue: document.getElementById('reading-value'),
+                    isNewMeter: document.getElementById('is-new-meter'),
+                    backToMeters: document.getElementById('back-to-meters'),
+                    backFromAdd: document.getElementById('back-from-add'),
+                    quickAddBtn: document.getElementById('quick-add-btn'),
+                    addMeterBtn: document.getElementById('add-meter-btn'),
+                    addMeterModal: document.getElementById('add-meter-modal'),
+                    addMeterModalClose: document.getElementById('add-meter-modal-close'),
+                    addMeterForm: document.getElementById('add-meter-form'),
+                    editMeterModal: document.getElementById('edit-meter-modal'),
+                    editMeterModalClose: document.getElementById('edit-meter-modal-close'),
+                    editMeterForm: document.getElementById('edit-meter-form'),
+                    editMeterId: document.getElementById('edit-meter-id'),
+                    editMeterName: document.getElementById('edit-meter-name'),
+                    editMeterUnit: document.getElementById('edit-meter-unit'),
+                    quickAddModal: document.getElementById('quick-add-modal'),
+                    quickAddModalClose: document.getElementById('quick-add-modal-close'),
+                    importModal: document.getElementById('import-modal'),
+                    importModalClose: document.getElementById('import-modal-close'),
+                    importFile: document.getElementById('import-file'),
+                    confirmImport: document.getElementById('confirm-import'),
+                    exportData: document.getElementById('export-data'),
+                    importData: document.getElementById('import-data'),
+                    clearData: document.getElementById('clear-data'),
+                    confirmModal: document.getElementById('confirm-modal'),
+                    confirmModalClose: document.getElementById('confirm-modal-close'),
+                    confirmTitle: document.getElementById('confirm-title'),
+                    confirmMessage: document.getElementById('confirm-message'),
+                    confirmYes: document.getElementById('confirm-yes'),
+                    confirmNo: document.getElementById('confirm-no'),
+                    toast: document.getElementById('toast'),
+                    toastIcon: document.getElementById('toast-icon'),
+                    toastMessage: document.getElementById('toast-message'),
+                    themeToggle: document.getElementById('theme-toggle')
+                };
+            }
+
+            init() {
+                // Load data from local storage
+                this.loadData();
+                
+                // Initialize UI
+                this.initializeTabs();
+                this.initializeEventListeners();
+                this.initializeTheme();
+                
+                // Render initial data
+                this.renderMeters();
+                this.updateStats();
+            }
+
+            // Data Management Methods
+            loadData() {
+                const storedData = localStorage.getItem('meterTrackData');
+                if (storedData) {
+                    try {
+                        const data = JSON.parse(storedData);
+                        this.meters = data.meters || [];
+                    } catch (e) {
+                        console.error('Error loading data:', e);
+                        this.meters = [];
+                    }
+                }
+            }
+
+            saveData() {
+                const data = {
+                    meters: this.meters
+                };
+                localStorage.setItem('meterTrackData', JSON.stringify(data));
+            }
+
+            addMeter(meter) {
+                // Generate a unique ID
+                meter.id = Date.now().toString();
+                
+                // Initialize readings array
+                meter.readings = [];
+                
+                // Initialize cumulative total
+                meter.cumulativeTotal = 0;
+                
+                // Add to meters array
+                this.meters.push(meter);
+                
+                // Save to local storage
+                this.saveData();
+                
+                // Update UI
+                this.renderMeters();
+                this.updateStats();
+                
+                // Show success message
+                this.showToast('Meter added successfully', 'success');
+                
+                return meter;
+            }
+
+            updateMeter(id, updatedMeter) {
+                const index = this.meters.findIndex(m => m.id === id);
+                if (index !== -1) {
+                    // Preserve the ID and readings
+                    updatedMeter.id = id;
+                    updatedMeter.readings = this.meters[index].readings;
+                    updatedMeter.cumulativeTotal = this.meters[index].cumulativeTotal;
+                    
+                    // Update the meter
+                    this.meters[index] = updatedMeter;
+                    
+                    // Save to local storage
+                    this.saveData();
+                    
+                    // Update UI
+                    this.renderMeters();
+                    this.updateStats();
+                    
+                    // Show success message
+                    this.showToast('Meter updated successfully', 'success');
+                    return true;
+                }
+                return false;
+            }
+
+            deleteMeter(id) {
+                const index = this.meters.findIndex(m => m.id === id);
+                if (index !== -1) {
+                    // Remove the meter
+                    this.meters.splice(index, 1);
+                    
+                    // Save to local storage
+                    this.saveData();
+                    
+                    // Update UI
+                    this.renderMeters();
+                    this.updateStats();
+                    
+                    // Show success message
+                    this.showToast('Meter deleted successfully', 'success');
+                    return true;
+                }
+                return false;
+            }
+
+            addReading(meterId, reading, isNewMeter) {
+                const meterIndex = this.meters.findIndex(m => m.id === meterId);
+                if (meterIndex !== -1) {
+                    const meter = this.meters[meterIndex];
+                    
+                    // Generate a unique ID for the reading
+                    reading.id = Date.now().toString();
+                    
+                    // Add timestamp
+                    reading.timestamp = new Date().toISOString();
+                    
+                    // Handle new meter (reset) case
+                    reading.isNewMeter = isNewMeter;
+                    
+                    // Calculate incremental value for cumulative total
+                    if (meter.readings.length > 0 && !isNewMeter) {
+                        const lastReading = meter.readings[meter.readings.length - 1];
+                        const increment = reading.value - lastReading.value;
+                        if (increment >= 0) {
+                            meter.cumulativeTotal += increment;
+                        } else {
+                            // If negative increment, assume it's a meter reset without the checkbox
+                            meter.cumulativeTotal += reading.value;
+                        }
+                    } else {
+                        // First reading or new meter
+                        meter.cumulativeTotal += reading.value;
+                    }
+                    
+                    // Add to readings array
+                    meter.readings.push(reading);
+                    
+                    // Save to local storage
+                    this.saveData();
+                    
+                    // Update UI
+                    this.updateStats();
+                    
+                    // Show success message
+                    this.showToast('Reading added successfully', 'success');
+                    return true;
+                }
+                return false;
+            }
+
+            deleteReading(meterId, readingId) {
+                const meterIndex = this.meters.findIndex(m => m.id === meterId);
+                if (meterIndex !== -1) {
+                    const meter = this.meters[meterIndex];
+                    const readingIndex = meter.readings.findIndex(r => r.id === readingId);
+                    
+                    if (readingIndex !== -1) {
+                        // Remove the reading
+                        meter.readings.splice(readingIndex, 1);
+                        
+                        // Recalculate cumulative total
+                        this.recalculateCumulativeTotal(meter);
+                        
+                        // Save to local storage
+                        this.saveData();
+                        
+                        // Update UI
+                        this.renderMeterDetail(meterId);
+                        this.updateStats();
+                        
+                        // Show success message
+                        this.showToast('Reading deleted successfully', 'success');
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            recalculateCumulativeTotal(meter) {
+                meter.cumulativeTotal = 0;
+                let lastValue = 0;
+                
+                meter.readings.forEach((reading, index) => {
+                    if (index === 0 || reading.isNewMeter) {
+                        meter.cumulativeTotal += reading.value;
+                    } else {
+                        const increment = reading.value - lastValue;
+                        if (increment >= 0) {
+                            meter.cumulativeTotal += increment;
+                        } else {
+                            // If negative increment, assume it's a meter reset
+                            meter.cumulativeTotal += reading.value;
+                        }
+                    }
+                    lastValue = reading.value;
+                });
+            }
+
+            clearAllData() {
+                this.meters = [];
+                this.saveData();
+                this.renderMeters();
+                this.updateStats();
+                this.showToast('All data cleared successfully', 'success');
+            }
+
+            exportDataToJson() {
+                const dataStr = JSON.stringify({ meters: this.meters }, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                
+                const exportFileName = `meter-tracker-export-${new Date().toISOString().slice(0, 10)}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileName);
+                linkElement.click();
+                
+                this.showToast('Data exported successfully', 'success');
+            }
+
+            importDataFromJson(jsonData, option) {
+                try {
+                    const importedData = JSON.parse(jsonData);
+                    
+                    // Validate imported data
+                    if (!importedData.meters || !Array.isArray(importedData.meters)) {
+                        throw new Error('Invalid data format');
+                    }
+                    
+                    // Process based on selected option
+                    if (option === 'replace') {
+                        this.meters = importedData.meters;
+                    } else if (option === 'merge') {
+                        // Merge by ID, avoiding duplicates
+                        const existingIds = new Set(this.meters.map(m => m.id));
+                        for (const meter of importedData.meters) {
+                            if (!existingIds.has(meter.id)) {
+                                this.meters.push(meter);
+                                existingIds.add(meter.id);
+                            }
+                        }
+                    }
+                    
+                    // Save and update UI
+                    this.saveData();
+                    this.renderMeters();
+                    this.updateStats();
+                    
+                    this.showToast('Data imported successfully', 'success');
+                    return true;
+                } catch (e) {
+                    console.error('Error importing data:', e);
+                    this.showToast('Error importing data: ' + e.message, 'error');
+                    return false;
+                }
+            }
+
+            // UI Rendering Methods
+            renderMeters() {
+                const metersContainer = this.elements.metersList;
+                
+                if (this.meters.length > 0) {
+                    metersContainer.innerHTML = '';
+                    this.meters.forEach(meter => {
+                        metersContainer.appendChild(this.createMeterElement(meter));
+                    });
+                } else {
+                    metersContainer.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📊</div>
+                            <div class="empty-state-text">No meters yet</div>
+                            <button class="btn" id="add-first-meter">Add Your First Meter</button>
+                        </div>
+                    `;
+                    document.getElementById('add-first-meter').addEventListener('click', () => {
+                        this.openAddMeterModal();
+                    });
+                }
+                
+                // Also update quick add meter list
+                this.renderQuickAddMeterList();
+            }
+
+            renderQuickAddMeterList() {
+                const quickMeterList = this.elements.quickMeterList;
+                
+                if (this.meters.length > 0) {
+                    quickMeterList.innerHTML = '';
+                    this.meters.forEach(meter => {
+                        const meterItem = document.createElement('div');
+                        meterItem.className = 'meter-item';
+                        
+                        meterItem.innerHTML = `
+                            <div class="meter-info">
+                                <div class="meter-name">${meter.name}</div>
+                                <div class="meter-details">Unit: ${meter.unit}</div>
+                            </div>
+                        `;
+                        
+                        meterItem.addEventListener('click', () => {
+                            this.openAddReadingForm(meter.id);
+                            this.closeQuickAddModal();
+                        });
+                        
+                        quickMeterList.appendChild(meterItem);
+                    });
+                } else {
+                    quickMeterList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-text">No meters yet</div>
+                            <button class="btn" id="quick-add-first-meter">Add Your First Meter</button>
+                        </div>
+                    `;
+                    document.getElementById('quick-add-first-meter').addEventListener('click', () => {
+                        this.closeQuickAddModal();
+                        this.openAddMeterModal();
+                    });
+                }
+            }
+
+            createMeterElement(meter) {
+                const element = document.createElement('div');
+                element.className = 'meter-item';
+                
+                // Get latest reading if available
+                let latestReading = '-';
+                let latestDate = '';
+                
+                if (meter.readings.length > 0) {
+                    const latest = meter.readings[meter.readings.length - 1];
+                    latestReading = `${latest.value} ${meter.unit}`;
+                    latestDate = this.formatDate(latest.timestamp);
+                }
+                
+                element.innerHTML = `
+                    <div class="meter-info">
+                        <div class="meter-name">${meter.name}</div>
+                        <div class="meter-details">Latest: ${latestReading}</div>
+                        <div class="meter-details">${latestDate}</div>
+                        <div class="cumulative-info">Total: ${meter.cumulativeTotal.toFixed(2)} ${meter.unit}</div>
+                    </div>
+                    <div class="meter-actions">
+                        <button class="action-btn add" data-id="${meter.id}">+</button>
+                        <button class="action-btn edit" data-id="${meter.id}">✏️</button>
+                        <button class="action-btn delete" data-id="${meter.id}">🗑️</button>
+                    </div>
+                `;
+                
+                // Add event listeners
+                element.querySelector('.meter-info').addEventListener('click', () => {
+                    this.renderMeterDetail(meter.id);
+                });
+                
+                element.querySelector('.add').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openAddReadingForm(e.target.dataset.id);
+                });
+                
+                element.querySelector('.edit').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openEditMeterModal(e.target.dataset.id);
+                });
+                
+                element.querySelector('.delete').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.confirmDeleteMeter(e.target.dataset.id);
+                });
+                
+                return element;
+            }
+
+            renderMeterDetail(meterId) {
+                const meter = this.meters.find(m => m.id === meterId);
+                if (!meter) return;
+                
+                this.currentMeterId = meterId;
+                
+                // Update meter details
+                this.elements.detailMeterName.textContent = meter.name;
+                this.elements.detailMeterUnit.textContent = `Unit: ${meter.unit}`;
+                this.elements.detailMeterTotal.textContent = `Total: ${meter.cumulativeTotal.toFixed(2)} ${meter.unit}`;
+                
+                // Render readings
+                const readingsContainer = this.elements.readingsList;
+                
+                if (meter.readings.length > 0) {
+                    readingsContainer.innerHTML = '';
+                    
+                    // Sort readings by date (newest first)
+                    const sortedReadings = [...meter.readings].sort((a, b) => 
+                        new Date(b.timestamp) - new Date(a.timestamp)
+                    );
+                    
+                    sortedReadings.forEach(reading => {
+                        readingsContainer.appendChild(this.createReadingElement(reading, meter));
+                    });
+                } else {
+                    readingsContainer.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📊</div>
+                            <div class="empty-state-text">No readings yet</div>
+                            <button class="btn" id="add-first-reading">Add Your First Reading</button>
+                        </div>
+                    `;
+                    document.getElementById('add-first-reading').addEventListener('click', () => {
+                        this.openAddReadingForm(meterId);
+                    });
+                }
+                
+                // Switch to meter detail tab
+                this.switchToTab('meter-detail');
+            }
+
+            createReadingElement(reading, meter) {
+                const element = document.createElement('div');
+                element.className = 'reading-item';
+                
+                element.innerHTML = `
+                    <div class="reading-info">
+                        <div class="reading-value">${reading.value} ${meter.unit}</div>
+                        <div class="reading-date">${this.formatDate(reading.timestamp)}</div>
+                        ${reading.isNewMeter ? '<div class="cumulative-info">New meter installed</div>' : ''}
+                    </div>
+                    <div class="reading-actions">
+                        <button class="action-btn delete" data-id="${reading.id}">🗑️</button>
+                    </div>
+                `;
+                
+                // Add event listeners
+                element.querySelector('.delete').addEventListener('click', (e) => {
+                    this.confirmDeleteReading(meter.id, e.target.dataset.id);
+                });
+                
+                return element;
+            }
+
+            updateStats() {
+                // Update total meters
+                this.elements.totalMeters.textContent = this.meters.length;
+                
+                // Update total readings
+                let totalReadings = 0;
+                this.meters.forEach(meter => {
+                    totalReadings += meter.readings.length;
+                });
+                this.elements.totalReadings.textContent = totalReadings;
+            }
+
+            // UI Event Handlers
+            initializeTabs() {
+                this.elements.tabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        const tabName = tab.dataset.tab;
+                        this.switchToTab(tabName);
+                    });
+                });
+            }
+
+            switchToTab(tabName) {
+                this.currentTab = tabName;
+                
+                // Update tab active state for main tabs
+                this.elements.tabs.forEach(tab => {
+                    if (tab.dataset.tab === tabName) {
+                        tab.classList.add('active');
+                    } else {
+                        tab.classList.remove('active');
+                    }
+                });
+                
+                // Update content visibility
+                this.elements.tabContents.forEach(content => {
+                    if (content.id === tabName) {
+                        content.classList.add('active');
+                    } else {
+                        content.classList.remove('active');
+                    }
+                });
+            }
+
+            initializeEventListeners() {
+                // Back buttons
+                this.elements.backToMeters.addEventListener('click', () => {
+                    this.switchToTab('meters');
+                });
+                
+                this.elements.backFromAdd.addEventListener('click', () => {
+                    if (this.currentMeterId) {
+                        this.renderMeterDetail(this.currentMeterId);
+                    } else {
+                        this.switchToTab('meters');
+                    }
+                });
+                
+                // Quick add button
+                this.elements.quickAddBtn.addEventListener('click', () => {
+                    this.openQuickAddModal();
+                });
+                
+                // Add meter button
+                this.elements.addMeterBtn.addEventListener('click', () => {
+                    this.openAddMeterModal();
+                });
+                
+                // Add meter form
+                this.elements.addMeterForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleAddMeterSubmit();
+                });
+                
+                // Edit meter form
+                this.elements.editMeterForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleEditMeterSubmit();
+                });
+                
+                // Add reading form
+                this.elements.addReadingForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.handleAddReadingSubmit();
+                });
+                
+                // Modal close buttons
+                this.elements.addMeterModalClose.addEventListener('click', () => {
+                    this.closeAddMeterModal();
+                });
+                
+                this.elements.editMeterModalClose.addEventListener('click', () => {
+                    this.closeEditMeterModal();
+                });
+                
+                this.elements.quickAddModalClose.addEventListener('click', () => {
+                    this.closeQuickAddModal();
+                });
+                
+                this.elements.importModalClose.addEventListener('click', () => {
+                    this.closeImportModal();
+                });
+                
+                this.elements.confirmModalClose.addEventListener('click', () => {
+                    this.closeConfirmModal();
+                });
+                
+                // Import/Export buttons
+                this.elements.exportData.addEventListener('click', () => {
+                    this.exportDataToJson();
+                });
+                
+                this.elements.importData.addEventListener('click', () => {
+                    this.openImportModal();
+                });
+                
+                this.elements.confirmImport.addEventListener('click', () => {
+                    this.handleImportConfirm();
+                });
+                
+                // Clear data button
+                this.elements.clearData.addEventListener('click', () => {
+                    this.confirmClearData();
+                });
+                
+                // Confirmation modal buttons
+                this.elements.confirmYes.addEventListener('click', () => {
+                    if (this.confirmCallback) {
+                        this.confirmCallback();
+                    }
+                    this.closeConfirmModal();
+                });
+                
+                this.elements.confirmNo.addEventListener('click', () => {
+                    this.closeConfirmModal();
+                });
+                
+                // Theme toggle
+                this.elements.themeToggle.addEventListener('change', () => {
+                    this.toggleTheme();
+                });
+            }
+
+            initializeTheme() {
+                // Check saved theme preference
+                const darkMode = localStorage.getItem('darkMode') === 'true';
+                if (darkMode) {
+                    document.body.classList.add('dark-mode');
+                    this.elements.themeToggle.checked = true;
+                }
+            }
+
+            toggleTheme() {
+                const isDarkMode = this.elements.themeToggle.checked;
+                if (isDarkMode) {
+                    document.body.classList.add('dark-mode');
+                } else {
+                    document.body.classList.remove('dark-mode');
+                }
+                localStorage.setItem('darkMode', isDarkMode);
+            }
+
+            // Form Handling
+            handleAddMeterSubmit() {
+                const meter = {
+                    name: this.elements.addMeterForm.querySelector('#meter-name').value.trim(),
+                    unit: this.elements.addMeterForm.querySelector('#meter-unit').value.trim()
+                };
+                
+                this.addMeter(meter);
+                this.closeAddMeterModal();
+                this.elements.addMeterForm.reset();
+            }
+
+            handleEditMeterSubmit() {
+                const meterId = this.elements.editMeterId.value;
+                const updatedMeter = {
+                    name: this.elements.editMeterName.value.trim(),
+                    unit: this.elements.editMeterUnit.value.trim()
+                };
+                
+                const success = this.updateMeter(meterId, updatedMeter);
+                if (success) {
+                    this.closeEditMeterModal();
+                    
+                    // If we're in meter detail view, update it
+                    if (this.currentTab === 'meter-detail' && this.currentMeterId === meterId) {
+                        this.renderMeterDetail(meterId);
+                    }
+                }
+            }
+
+            handleAddReadingSubmit() {
+                const meterId = this.elements.addMeterId.value;
+                const value = parseFloat(this.elements.readingValue.value);
+                const isNewMeter = this.elements.isNewMeter.checked;
+                
+                const reading = {
+                    value: value,
+                    isNewMeter: isNewMeter
+                };
+                
+                const success = this.addReading(meterId, reading, isNewMeter);
+                if (success) {
+                    // Reset form
+                    this.elements.addReadingForm.reset();
+                    
+                    // Go back to meter detail
+                    this.renderMeterDetail(meterId);
+                }
+            }
+
+            handleImportConfirm() {
+                const fileInput = this.elements.importFile;
+                const importOption = document.querySelector('input[name="import-option"]:checked').value;
+                
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    this.showToast('Please select a file to import', 'error');
+                    return;
+                }
+                
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    const success = this.importDataFromJson(e.target.result, importOption);
+                    if (success) {
+                        this.closeImportModal();
+                    }
+                };
+                
+                reader.onerror = () => {
+                    this.showToast('Error reading file', 'error');
+                };
+                
+                reader.readAsText(file);
+            }
+
+            // Modal Management
+            openAddMeterModal() {
+                this.elements.addMeterModal.classList.add('active');
+            }
+
+            closeAddMeterModal() {
+                this.elements.addMeterModal.classList.remove('active');
+                this.elements.addMeterForm.reset();
+            }
+
+            openEditMeterModal(meterId) {
+                const meter = this.meters.find(m => m.id === meterId);
+                if (!meter) return;
+                
+                this.elements.editMeterId.value = meterId;
+                this.elements.editMeterName.value = meter.name;
+                this.elements.editMeterUnit.value = meter.unit;
+                
+                this.elements.editMeterModal.classList.add('active');
+            }
+
+            closeEditMeterModal() {
+                this.elements.editMeterModal.classList.remove('active');
+            }
+
+            openQuickAddModal() {
+                this.renderQuickAddMeterList();
+                this.elements.quickAddModal.classList.add('active');
+            }
+
+            closeQuickAddModal() {
+                this.elements.quickAddModal.classList.remove('active');
+            }
+
+            openAddReadingForm(meterId) {
+                const meter = this.meters.find(m => m.id === meterId);
+                if (!meter) return;
+                
+                // Set meter info
+                this.elements.addMeterName.textContent = meter.name;
+                this.elements.addMeterUnit.textContent = `Unit: ${meter.unit}`;
+                this.elements.addMeterId.value = meterId;
+                
+                // Reset form fields
+                this.elements.readingValue.value = '';
+                this.elements.isNewMeter.checked = false;
+                
+                // Switch to add reading tab
+                this.switchToTab('add-reading');
+            }
+
+            openImportModal() {
+                this.elements.importModal.classList.add('active');
+            }
+
+            closeImportModal() {
+                this.elements.importModal.classList.remove('active');
+                this.elements.importFile.value = '';
+            }
+
+            confirmDeleteMeter(meterId) {
+                this.confirmCallback = () => {
+                    this.deleteMeter(meterId);
+                    
+                    // If we're in meter detail view for this meter, go back to meters
+                    if (this.currentTab === 'meter-detail' && this.currentMeterId === meterId) {
+                        this.switchToTab('meters');
+                    }
+                };
+                
+                this.elements.confirmTitle.textContent = 'Delete Meter';
+                this.elements.confirmMessage.textContent = 'Are you sure you want to delete this meter and all its readings? This action cannot be undone.';
+                this.elements.confirmModal.classList.add('active');
+            }
+
+            confirmDeleteReading(meterId, readingId) {
+                this.confirmCallback = () => {
+                    this.deleteReading(meterId, readingId);
+                };
+                
+                this.elements.confirmTitle.textContent = 'Delete Reading';
+                this.elements.confirmMessage.textContent = 'Are you sure you want to delete this reading? This action cannot be undone.';
+                this.elements.confirmModal.classList.add('active');
+            }
+
+            confirmClearData() {
+                this.confirmCallback = () => {
+                    this.clearAllData();
+                    
+                    // Go back to meters tab
+                    this.switchToTab('meters');
+                };
+                
+                this.elements.confirmTitle.textContent = 'Clear All Data';
+                this.elements.confirmMessage.textContent = 'Are you sure you want to delete ALL meters and readings? This action cannot be undone.';
+                this.elements.confirmModal.classList.add('active');
+            }
+
+            closeConfirmModal() {
+                this.elements.confirmModal.classList.remove('active');
+                this.confirmCallback = null;
+            }
+
+            // Utility Methods
+            formatDate(dateString) {
+                const date = new Date(dateString);
+                return date.toLocaleString();
+            }
+
+            showToast(message, type = 'info') {
+                const toast = this.elements.toast;
+                const toastMessage = this.elements.toastMessage;
+                const toastIcon = this.elements.toastIcon;
+                
+                // Set message
+                toastMessage.textContent = message;
+                
+                // Set type
+                toast.className = 'toast';
+                toast.classList.add(type);
+                
+                // Set icon
+                switch (type) {
+                    case 'success':
+                        toastIcon.textContent = '✓';
+                        break;
+                    case 'error':
+                        toastIcon.textContent = '✗';
+                        break;
+                    case 'warning':
+                        toastIcon.textContent = '⚠';
+                        break;
+                    default:
+                        toastIcon.textContent = 'ℹ';
+                }
+                
+                // Show toast
+                toast.classList.add('show');
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>

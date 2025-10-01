@@ -1,0 +1,122 @@
+Step 1: Prepare Your Project Structure
+
+my-pwa/
+│
+├── index.html
+├── manifest.json       ← Will create
+├── service-worker.js   ← Will create
+└── (optional) assets/
+
+
+✅ Step 2: Create manifest.json
+Create a new file called manifest.json in the same folder as your index.html.
+
+manifest.json should have the below
+{
+  "name": "My PWA App",
+  "short_name": "PWA App",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+
+
+📌 Add two icon files: icon-192.png and icon-512.png to your project directory.
+
+
+
+✅ Step 3: Create service-worker.js
+This file caches your site for offline usage.
+
+service-worker.js should have the below
+const CACHE_NAME = "my-pwa-cache-v1";
+const urlsToCache = [
+  "/",
+  "/index.html"
+  // Add CSS/JS files here if not inline
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => response || fetch(event.request))
+  );
+});
+
+
+
+✅ Step 4: Update index.html to Link Manifest and Register Service Worker
+In the <head> of your index.html, add:
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
+
+At the bottom of <body>, just before </body>, add:
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js')
+      .then(() => console.log('Service Worker registered'));
+  }
+</script>
+
+
+
+✅ Step 5: Start a Local Server
+Your PWA must be served via HTTP/HTTPS, not file://.
+
+If you have Python installed:
+python3 -m http.server 8000  # Run this in the same folder where you have your index.html file
+
+
+
+✅ Step 6: Access on Mobile
+Option 1: Same Network
+Find your local IP address (e.g., 192.168.1.5).
+
+On mobile, visit http://192.168.1.5:8000 in Chrome.
+
+You’ll see the Add to Home screen prompt or manually use the browser menu to install the PWA. 
+The above does not work. What must be done is host this on a platform that provides this via https:// and then add as a PWA.
+
+Upload these files to a github repo and then
+
+Go to your repo: https://github.com/YOUR_USERNAME/my-pwa-app
+
+Click on the Settings tab
+
+In the left sidebar, click Pages (under "Code and automation")
+
+Under "Source", select:
+
+Branch: main
+
+Folder: / (root)
+
+Click Save
+
+📢 GitHub will give you a public URL like:
+
+https://YOUR_USERNAME.github.io/my-pwa-app/
+
+After installing the PWA, unpublish it so that it is not accessible anymore.

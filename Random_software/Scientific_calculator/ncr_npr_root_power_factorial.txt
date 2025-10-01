@@ -1,0 +1,259 @@
+# @title Default title text
+import ipywidgets as widgets
+from ipywidgets import VBox, HBox, Layout
+import math, fractions
+from IPython.display import display
+
+# Global state
+calc_expr = "0"         # the current expression shown on display
+pending_operator = None # one of "power", "nth_root", "nCr", "nPr"
+stored_value = None     # the first operand (as string)
+
+# Mapping of binary operators to display symbols.
+operator_symbols = {
+    "power": "^",
+    "nth_root": " nrt ",
+    "nCr": " C ",
+    "nPr": " P "
+}
+
+# The calculator display
+calc_display = widgets.Text(
+    value="0",
+    disabled=True,
+    layout=Layout(width="400px", height="40px", font_size="20px", text_align="right")
+)
+
+def update_display():
+    calc_display.value = str(calc_expr)
+
+def clear_all():
+    global calc_expr, pending_operator, stored_value
+    calc_expr = "0"
+    pending_operator = None
+    stored_value = None
+    update_display()
+
+def append_to_expr(s):
+    global calc_expr
+    # If display is "0", replace it unless appending an operator.
+    if calc_expr == "0":
+        if s.strip() in operator_symbols.values():
+            calc_expr += s
+        else:
+            calc_expr = s
+    else:
+        calc_expr += s
+    update_display()
+
+def append_digit(digit):
+    append_to_expr(digit)
+
+def append_decimal():
+    global calc_expr, pending_operator
+    if pending_operator:
+        op_sym = operator_symbols[pending_operator]
+        parts = calc_expr.split(op_sym)
+        current = parts[-1]
+    else:
+        current = calc_expr
+    if "." not in current:
+        append_to_expr(".")
+
+def clear_all_button():
+    clear_all()
+
+def set_operator(op):
+    global calc_expr, pending_operator, stored_value
+    if pending_operator is None:
+        stored_value = calc_expr
+        pending_operator = op
+        append_to_expr(operator_symbols[op])
+
+def calculate_result():
+    global calc_expr, pending_operator, stored_value
+    if pending_operator is None:
+        return
+    op_sym = operator_symbols[pending_operator]
+    try:
+        parts = calc_expr.split(op_sym)
+        if len(parts) != 2:
+            update_display_error("Error")
+            return
+        first_str = parts[0].strip()
+        second_str = parts[1].strip()
+        if first_str == "" or second_str == "":
+            update_display_error("Error")
+            return
+        first_num = float(first_str)
+        second_num = float(second_str)
+        result = None
+        if pending_operator == "power":
+            result = first_num ** second_num
+        elif pending_operator == "nth_root":
+            # For nth root, we assume the first number is the index and the second is the radicand.
+            # So 4 nth_root 8 should yield 8^(1/4).
+            if first_num == 0:
+                update_display_error("Error")
+                return
+            result = second_num ** (1/first_num)
+        elif pending_operator == "nCr":
+            result = math.comb(int(first_num), int(second_num))
+        elif pending_operator == "nPr":
+            result = math.perm(int(first_num), int(second_num))
+        else:
+            update_display_error("Error")
+            return
+        calc_expr = str(result)
+        pending_operator = None
+        stored_value = None
+        update_display()
+    except Exception as e:
+        update_display_error("Error")
+
+def update_display_error(msg):
+    global calc_expr, pending_operator, stored_value
+    calc_expr = msg
+    pending_operator = None
+    stored_value = None
+    update_display()
+
+def unary_operation(func):
+    global calc_expr, pending_operator
+    try:
+        if pending_operator is not None:
+            op_sym = operator_symbols[pending_operator]
+            parts = calc_expr.split(op_sym)
+            if len(parts) == 2 and parts[1].strip() != "":
+                second_num = float(parts[1].strip())
+                result = func(second_num)
+                calc_expr = parts[0] + op_sym + str(result)
+            else:
+                update_display_error("Error")
+                return
+        else:
+            result = func(float(calc_expr))
+            calc_expr = str(result)
+        update_display()
+    except Exception as e:
+        update_display_error("Error")
+
+def inverse_op():
+    unary_operation(lambda x: 1/x if x != 0 else float('inf'))
+
+def square_op():
+    unary_operation(lambda x: x**2)
+
+def sqrt_op():
+    unary_operation(lambda x: math.sqrt(x) if x >= 0 else float('nan'))
+
+def factorial_op():
+    unary_operation(lambda x: math.factorial(int(x)) if x >= 0 and int(x) == x else None)
+
+# Enhanced decimal to fraction: show mixed fraction and normal fraction if improper.
+def fraction_op():
+    global calc_expr
+    try:
+        num = float(calc_expr)
+        frac = fractions.Fraction(num).limit_denominator()
+        # Check if improper fraction (absolute numerator greater than denominator)
+        if abs(frac.numerator) > frac.denominator:
+            whole = abs(frac.numerator) // frac.denominator
+            remainder = abs(frac.numerator) % frac.denominator
+            sign = "-" if frac.numerator < 0 else ""
+            mixed = f"{sign}{whole} {remainder}/{frac.denominator}" if remainder != 0 else f"{sign}{whole}"
+            normal = f"{frac.numerator}/{frac.denominator}"
+            result_str = f"{mixed} ({normal})"
+        else:
+            result_str = f"{frac.numerator}/{frac.denominator}"
+        calc_expr = result_str
+        update_display()
+    except Exception as e:
+        update_display_error("Error")
+
+def pi_op():
+    global calc_expr
+    calc_expr = str(math.pi)
+    update_display()
+
+def e_op():
+    global calc_expr
+    calc_expr = str(math.e)
+    update_display()
+
+def operator_power(b):
+    set_operator("power")
+
+def operator_nth_root(b):
+    set_operator("nth_root")
+
+def operator_nCr(b):
+    set_operator("nCr")
+
+def operator_nPr(b):
+    set_operator("nPr")
+
+def equals_op(b):
+    calculate_result()
+
+def clear_button(b):
+    clear_all()
+
+# Digit buttons 0-9
+digit_buttons = [widgets.Button(description=str(i), layout=Layout(width="60px", height="40px")) for i in range(10)]
+for btn in digit_buttons:
+    btn.on_click(lambda b, d=btn.description: append_digit(d))
+
+btn_decimal = widgets.Button(description=".", layout=Layout(width="60px", height="40px"))
+btn_decimal.on_click(lambda b: append_decimal())
+
+btn_inverse = widgets.Button(description="1/x", layout=Layout(width="60px", height="40px"))
+btn_inverse.on_click(lambda b: inverse_op())
+
+btn_square = widgets.Button(description="x²", layout=Layout(width="60px", height="40px"))
+btn_square.on_click(lambda b: square_op())
+
+btn_sqrt = widgets.Button(description="√x", layout=Layout(width="60px", height="40px"))
+btn_sqrt.on_click(lambda b: sqrt_op())
+
+btn_frac = widgets.Button(description="Frac", layout=Layout(width="60px", height="40px"))
+btn_frac.on_click(lambda b: fraction_op())
+
+btn_fact = widgets.Button(description="x!", layout=Layout(width="60px", height="40px"))
+btn_fact.on_click(lambda b: factorial_op())
+
+btn_power = widgets.Button(description="^", layout=Layout(width="60px", height="40px"))
+btn_power.on_click(operator_power)
+
+btn_nth_root = widgets.Button(description="nrt", layout=Layout(width="60px", height="40px"))
+btn_nth_root.on_click(operator_nth_root)
+
+btn_nCr = widgets.Button(description="C", layout=Layout(width="60px", height="40px"))
+btn_nCr.on_click(operator_nCr)
+
+btn_nPr = widgets.Button(description="P", layout=Layout(width="60px", height="40px"))
+btn_nPr.on_click(operator_nPr)
+
+btn_equals = widgets.Button(description="=", layout=Layout(width="60px", height="40px"), button_style="success")
+btn_equals.on_click(equals_op)
+
+btn_pi = widgets.Button(description="π", layout=Layout(width="60px", height="40px"))
+btn_pi.on_click(lambda b: pi_op())
+
+btn_e = widgets.Button(description="e", layout=Layout(width="60px", height="40px"))
+btn_e.on_click(lambda b: e_op())
+
+btn_clear = widgets.Button(description="C", layout=Layout(width="60px", height="40px"), button_style="danger")
+btn_clear.on_click(clear_button)
+
+# Layout the calculator as a grid resembling a regular calculator.
+row1 = HBox([calc_display])
+row2 = HBox([digit_buttons[7], digit_buttons[8], digit_buttons[9], btn_power, btn_nth_root])
+row3 = HBox([digit_buttons[4], digit_buttons[5], digit_buttons[6], btn_nCr, btn_nPr])
+row4 = HBox([digit_buttons[1], digit_buttons[2], digit_buttons[3], btn_inverse, btn_square])
+row5 = HBox([digit_buttons[0], btn_decimal, btn_frac, btn_fact])
+row6 = HBox([btn_pi, btn_e, btn_sqrt, btn_clear, btn_equals])
+
+calculator_ui = VBox([row1, row2, row3, row4, row5, row6])
+display(calculator_ui)
+

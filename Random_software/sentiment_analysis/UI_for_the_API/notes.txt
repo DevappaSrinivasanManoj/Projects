@@ -1,0 +1,13 @@
+curl --location 'https://sentiment_analysis6.p.rapidapi.com/predict' \
+--header 'Content-Type: application/json' \
+--header 'x-rapidapi-key: 603ea374e3msh8fa1e5a3c9fc5acp13744fjsnd09208294e90' \
+--data '{
+    "comments": [
+        "This is amazing",
+        "This is bad"
+    ]
+}'
+
+Access the UI hosted on github pages using the below link
+
+https://devappasrinivasanmanoj.github.io/sentiment_analysis_api/

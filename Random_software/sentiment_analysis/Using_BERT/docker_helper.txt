@@ -1,0 +1,51 @@
+To pull the image
+docker pull python:3.11-slim
+
+
+To create a temporary container that auto-deletes after exiting from it
+docker run -it --rm -p 5000:5000 -v "%cd%":/app -w /app python:3.11-slim bash
+
+The above opens a terminal directly in the open cmd. In that do the below:
+
+pip install transformers torch --quiet (try running without --quiet as --quiet makes the installation to not show any progress status etc)
+pip install transformers torch
+pip install pandas
+
+pip install flask
+
+
+python3 App_API.py
+
+Once the API is running, you can send a POST request to http://127.0.0.1:5000/predict with a JSON body like this:
+
+
+{
+ "text": "This is a great product!"
+}
+
+Use the below curl
+
+curl --location 'http://localhost:5000/predict' \
+--header 'Content-Type: application/json' \
+--data '{
+    "texts": [
+        "cool",
+        "coool",
+        "cooool"
+    ]
+}'
+
+
+Till above for just running it. Now we have to deploy a prod version, so do the below
+
+pip install gunicorn
+
+This runs the prod server
+gunicorn --bind 0.0.0.0:5000 --workers 2 App_API_prod:app
+
+After this, the same curl as above works here.
+
+Have deployed the API in render server
+https://render.com/
+
+This did not work as render's server capacity was just 512MB of RAM and this is not enough for loading a BERT

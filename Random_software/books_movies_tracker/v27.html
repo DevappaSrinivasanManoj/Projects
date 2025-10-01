@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Tracker</title>
+    <style>
+        /* General body and font styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 10vh;
+        }
+
+        /* Main app container */
+        .tracker-container {
+            width: 100%;
+            max-width: 900px;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        /* Header section with title and search */
+        .app-header {
+            background-color: #3f51b5;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .app-header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .search-bar {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .search-bar input {
+            width: 80%;
+            max-width: 400px;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            background-color: #f0f0f0;
+        }
+
+        /* Tab navigation */
+        .tab-nav {
+            display: flex;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .tab-button {
+            flex-grow: 1;
+            padding: 15px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #fafafa;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        .tab-button:hover {
+            background-color: #f0f0f0;
+        }
+
+        .tab-button.active {
+            background-color: #fff;
+            color: #3f51b5;
+            border-bottom: 3px solid #3f51b5;
+        }
+
+        /* Main content area */
+        .content-pane {
+            display: none;
+            padding: 25px;
+        }
+
+        .content-pane.active {
+            display: block;
+        }
+
+        /* Counters and total count display */
+        .total-count {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #3f51b5;
+        }
+        
+        /* Forms for data entry */
+        .entry-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #e8eaf6;
+            border-radius: 8px;
+        }
+
+        .entry-form input,
+        .entry-form select {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row input, .form-row select {
+            flex: 1;
+        }
+
+        .submit-button {
+            padding: 12px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .submit-button:hover {
+            background-color: #45a049;
+        }
+        
+        .delete-button {
+            padding: 8px 12px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .delete-button:hover {
+            background-color: #da190b;
+        }
+
+        .edit-button {
+            padding: 8px 12px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .edit-button:hover {
+            background-color: #0b7dda;
+        }
+
+        /* Filter controls */
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-controls input,
+        .filter-controls select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        /* List of items */
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .item-card {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-left: 5px solid #3f51b5;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .item-details h4 {
+            margin: 0 0 5px 0;
+            font-size: 18px;
+        }
+
+        .item-details p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Pagination controls */
+        .pagination-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .pagination-controls button {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background-color: #fafafa;
+            cursor: pointer;
+        }
+
+        .pagination-controls button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Utility buttons (import/export) */
+        .utility-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+            background-color: #e0e0e0;
+            border-top: 1px solid #ccc;
+            flex-wrap: wrap;
+        }
+
+        .utility-buttons button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #555;
+            color: #fff;
+            transition: background-color 0.2s;
+        }
+
+        .utility-buttons button:hover {
+            background-color: #333;
+        }
+
+        .utility-buttons .clear-button {
+            background-color: #f44336;
+        }
+
+        .utility-buttons .clear-button:hover {
+            background-color: #da190b;
+        }
+
+        /* Styles for the Canvas graph */
+        .chart-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: auto;
+        }
+
+        .chart-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 14px;
+            padding: 10px;
+            background-color: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            z-index: 10;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color-box {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            pointer-events: none;
+            white-space: nowrap;
+            display: none;
+            z-index: 10;
+        }
+
+        #yearly-stats-canvas {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+
+        /* Message Box */
+        .message-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4caf50;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        /* Confirmation Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; /* Initially hidden */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        /* New class to show the modal */
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            transform: scale(0.95);
+            transition: transform 0.3s ease-out;
+        }
+
+        .modal.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .tracker-container {
+                padding: 10px;
+                box-shadow: none;
+                border-radius: 0;
+            }
+
+            body {
+                padding: 0;
+            }
+            
+            .entry-form {
+                padding: 10px;
+            }
+
+            .form-row {
+                flex-direction: column;
+            }
+
+            .filter-controls {
+                flex-direction: column;
+            }
+
+            .utility-buttons {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="tracker-container">
+    <!-- App Header -->
+    <div class="app-header">
+        <h1>Media Tracker</h1>
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search for a title...">
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+        <button class="tab-button active" onclick="switchPane('books')">Books</button>
+        <button class="tab-button" onclick="switchPane('movies')">Movies</button>
+        <button class="tab-button" onclick="switchPane('stats')">Yearly Stats</button>
+    </div>
+
+    <!-- Books Pane -->
+    <div id="books-pane" class="content-pane active">
+        <div class="total-count" id="books-total-count">Total Books Read: 0</div>
+        
+        <!-- Book Entry Form -->
+        <form id="book-form" class="entry-form">
+            <h3>Log a New Book</h3>
+            <div class="form-row">
+                <input type="text" id="book-title" placeholder="Book Title" required>
+                <input type="text" id="book-author" placeholder="Author" required>
+                <select id="book-rating" required>
+                    <option value="">Rating (1-5)</option>
+                    <option value="1">1 Star</option>
+                    <option value="2">2 Stars</option>
+                    <option value="3">3 Stars</option>
+                    <option value="4">4 Stars</option>
+                    <option value="5">5 Stars</option>
+                </select>
+                <input type="date" id="book-date" title="Completion Date">
+            </div>
+            <button type="submit" class="submit-button">Done Reading</button>
+        </form>
+        
+        <!-- Edit Book Form (initially hidden) -->
+        <form id="edit-book-form" class="entry-form" style="display: none;">
+            <h3>Edit Book Entry</h3>
+            <input type="hidden" id="edit-book-id">
+            <div class="form-row">
+                <input type="text" id="edit-book-title" placeholder="Book Title" required>
+                <input type="text" id="edit-book-author" placeholder="Author" required>
+                <select id="edit-book-rating" required>
+                    <option value="">Rating (1-5)</option>
+                    <option value="1">1 Star</option>
+                    <option value="2">2 Stars</option>
+                    <option value="3">3 Stars</option>
+                    <option value="4">4 Stars</option>
+                    <option value="5">5 Stars</option>
+                </select>
+                <input type="date" id="edit-book-date" title="Completion Date">
+            </div>
+            <div class="form-row" style="justify-content: flex-end;">
+                <button type="submit" class="submit-button">Save Changes</button>
+                <button type="button" class="delete-button" id="cancel-book-edit">Cancel</button>
+            </div>
+        </form>
+
+        <!-- Book Filter Controls -->
+        <div class="filter-controls">
+            <input type="text" id="books-filter-author" placeholder="Filter by Author">
+            <input type="number" id="books-filter-year" placeholder="Filter by Year">
+            <select id="books-filter-rating">
+                <option value="">Filter by Rating</option>
+                <option value="1">1 Star</option>
+                <option value="2">2 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="5">5 Stars</option>
+            </select>
+        </div>
+
+        <!-- Book List -->
+        <div id="books-list" class="item-list"></div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-controls" id="books-pagination">
+            <button id="books-prev-btn" disabled>Previous</button>
+            <button id="books-next-btn" disabled>Next</button>
+        </div>
+    </div>
+
+    <!-- Movies Pane -->
+    <div id="movies-pane" class="content-pane">
+        <div class="total-count" id="movies-total-count">Total Movies Watched: 0</div>
+
+        <!-- Movie Entry Form -->
+        <form id="movie-form" class="entry-form">
+            <h3>Log a New Movie</h3>
+            <div class="form-row">
+                <input type="text" id="movie-title" placeholder="Movie Title" required>
+                <input type="text" id="movie-director" placeholder="Director" required>
+                <select id="movie-rating" required>
+                    <option value="">Rating (1-5)</option>
+                    <option value="1">1 Star</option>
+                    <option value="2">2 Stars</option>
+                    <option value="3">3 Stars</option>
+                    <option value="4">4 Stars</option>
+                    <option value="5">5 Stars</option>
+                </select>
+                <input type="date" id="movie-date" title="Completion Date">
+            </div>
+            <button type="submit" class="submit-button">Done Watching</button>
+        </form>
+        
+        <!-- Edit Movie Form (initially hidden) -->
+        <form id="edit-movie-form" class="entry-form" style="display: none;">
+            <h3>Edit Movie Entry</h3>
+            <input type="hidden" id="edit-movie-id">
+            <div class="form-row">
+                <input type="text" id="edit-movie-title" placeholder="Movie Title" required>
+                <input type="text" id="edit-movie-director" placeholder="Director" required>
+                <select id="edit-movie-rating" required>
+                    <option value="">Rating (1-5)</option>
+                    <option value="1">1 Star</option>
+                    <option value="2">2 Stars</option>
+                    <option value="3">3 Stars</option>
+                    <option value="4">4 Stars</option>
+                    <option value="5">5 Stars</option>
+                </select>
+                <input type="date" id="edit-movie-date" title="Completion Date">
+            </div>
+            <div class="form-row" style="justify-content: flex-end;">
+                <button type="submit" class="submit-button">Save Changes</button>
+                <button type="button" class="delete-button" id="cancel-movie-edit">Cancel</button>
+            </div>
+        </form>
+
+        <!-- Movie Filter Controls -->
+        <div class="filter-controls">
+            <input type="text" id="movies-filter-director" placeholder="Filter by Director">
+            <input type="number" id="movies-filter-year" placeholder="Filter by Year">
+            <select id="movies-filter-rating">
+                <option value="">Filter by Rating</option>
+                <option value="1">1 Star</option>
+                <option value="2">2 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="5">5 Stars</option>
+            </select>
+        </div>
+
+        <!-- Movie List -->
+        <div id="movies-list" class="item-list"></div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-controls" id="movies-pagination">
+            <button id="movies-prev-btn" disabled>Previous</button>
+            <button id="movies-next-btn" disabled>Next</button>
+        </div>
+    </div>
+
+    <!-- Yearly Stats Pane -->
+    <div id="stats-pane" class="content-pane">
+        <h3 style="text-align: center; color: #3f51b5;">Yearly Media Consumption</h3>
+        <!-- Moved legend outside of chart-container -->
+        <div class="chart-legend">
+            <div class="legend-item">
+                <div class="legend-color-box" style="background-color: #4caf50;"></div> Books
+            </div>
+            <div class="legend-item">
+                <div class="legend-color-box" style="background-color: #f44336;"></div> Movies
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <!-- The canvas for drawing the graph -->
+            <canvas id="yearly-stats-canvas" height="400"></canvas>
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+    </div>
+
+    <!-- Import/Export Buttons -->
+    <div class="utility-buttons">
+        <button id="export-button">Export Data</button>
+        <input type="file" id="import-file-input" accept=".json" style="display: none;">
+        <button id="import-button">Import Data</button>
+        <button id="clear-all-button" class="clear-button">Clear All Data</button>
+    </div>
+
+    <!-- Message box for user feedback -->
+    <div id="message-box" class="message-box"></div>
+    
+    <!-- Confirmation Modal for single item deletion -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <h3>Confirm Deletion</h3>
+            <p>Are you sure you want to delete this entry? This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button id="confirm-delete-btn" class="delete-button">Delete</button>
+                <button id="cancel-delete-btn" class="submit-button" style="background-color: #555;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal for 'Clear All Data' -->
+    <div id="clear-all-modal" class="modal">
+        <div class="modal-content">
+            <h3>Clear All Data</h3>
+            <p>This will **permanently delete** all of your saved books and movies. Are you sure you want to continue?</p>
+            <p>A copy of your data will be exported as a backup before clearing.</p>
+            <div class="modal-buttons">
+                <button id="confirm-clear-all-btn" class="delete-button">Clear All</button>
+                <button id="cancel-clear-all-btn" class="submit-button" style="background-color: #555;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Global variables
+    let db;
+    const dbName = 'media-tracker-db';
+    const dbVersion = 1;
+    const itemsPerPage = 5;
+
+    // Data storage arrays
+    let allBooks = [];
+    let allMovies = [];
+    let filteredBooks = [];
+    let filteredMovies = [];
+    
+    // Pagination state
+    let booksCurrentPage = 1;
+    let moviesCurrentPage = 1;
+    
+    // Deletion confirmation state
+    let itemToDelete = { type: null, id: null };
+
+    // FIX: Add a state variable to control modal visibility
+    let isModalActive = false;
+
+    // UI element references
+    const bookForm = document.getElementById('book-form');
+    const movieForm = document.getElementById('movie-form');
+    const editBookForm = document.getElementById('edit-book-form');
+    const editMovieForm = document.getElementById('edit-movie-form');
+    const booksList = document.getElementById('books-list');
+    const moviesList = document.getElementById('movies-list');
+    const booksTotalCount = document.getElementById('books-total-count');
+    const moviesTotalCount = document.getElementById('movies-total-count');
+    const searchInput = document.getElementById('search-input');
+    const exportButton = document.getElementById('export-button');
+    const importButton = document.getElementById('import-button');
+    const clearAllButton = document.getElementById('clear-all-button');
+    const importFileInput = document.getElementById('import-file-input');
+    const messageBox = document.getElementById('message-box');
+    const confirmationModal = document.getElementById('confirmation-modal');
+    const clearAllModal = document.getElementById('clear-all-modal');
+    const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+    const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+    const confirmClearAllBtn = document.getElementById('confirm-clear-all-btn');
+    const cancelClearAllBtn = document.getElementById('cancel-clear-all-btn');
+    
+    // Pagination buttons
+    const booksPrevBtn = document.getElementById('books-prev-btn');
+    const booksNextBtn = document.getElementById('books-next-btn');
+    const moviesPrevBtn = document.getElementById('movies-prev-btn');
+    const moviesNextBtn = document.getElementById('movies-next-btn');
+
+    // Filter element references
+    const booksFilterAuthor = document.getElementById('books-filter-author');
+    const booksFilterYear = document.getElementById('books-filter-year');
+    const booksFilterRating = document.getElementById('books-filter-rating');
+    const moviesFilterDirector = document.getElementById('movies-filter-director');
+    const moviesFilterYear = document.getElementById('movies-filter-year');
+    const moviesFilterRating = document.getElementById('movies-filter-rating');
+
+    // Canvas elements
+    const canvas = document.getElementById('yearly-stats-canvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    
+    // Graph dimensions and margins
+    const margin = {top: 20, right: 30, bottom: 40, left: 50};
+    const height = canvas.height - margin.top - margin.bottom;
+
+    /**
+     * Shows a message box with a given message and optional styling.
+     * @param {string} message - The message to display.
+     * @param {string} [type='success'] - 'success' or 'error' to change styling.
+     */
+    function showMessage(message, type = 'success') {
+        messageBox.textContent = message;
+        messageBox.style.backgroundColor = type === 'success' ? '#4caf50' : '#f44336';
+        messageBox.style.display = 'block';
+        setTimeout(() => {
+            messageBox.style.opacity = '1';
+        }, 10); // Small delay to trigger transition
+        
+        setTimeout(() => {
+            messageBox.style.opacity = '0';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 500); // Wait for fade-out before hiding
+        }, 3000);
+    }
+
+    /**
+     * Shows a specified modal if no other modal is currently active.
+     * @param {HTMLElement} modalElement The modal to show.
+     */
+    function showModal(modalElement) {
+        if (!isModalActive) {
+            modalElement.classList.add('show');
+            isModalActive = true;
+        }
+    }
+
+    /**
+     * Hides a specified modal and resets the active modal state.
+     * @param {HTMLElement} modalElement The modal to hide.
+     */
+    function hideModal(modalElement) {
+        modalElement.classList.remove('show');
+        isModalActive = false;
+        // Also reset any pending actions
+        itemToDelete = { type: null, id: null };
+    }
+
+    /**
+     * Initializes the IndexedDB database.
+     */
+    function initDb() {
+        const request = indexedDB.open(dbName, dbVersion);
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains('books')) {
+                db.createObjectStore('books', { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('movies')) {
+                db.createObjectStore('movies', { keyPath: 'id', autoIncrement: true });
+            }
+            console.log('Database upgrade complete.');
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log('Database opened successfully.');
+            loadAllData();
+        };
+
+        request.onerror = (event) => {
+            console.error('IndexedDB error:', event.target.error);
+        };
+    }
+
+    /**
+     * Retrieves all items from an IndexedDB object store.
+     * @param {string} storeName - The name of the object store.
+     * @returns {Promise<Array>} A promise that resolves with an array of all items.
+     */
+    function getAllItems(storeName) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([storeName], 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+
+    /**
+     * Adds a new item to an IndexedDB object store and reloads data.
+     * @param {string} storeName - The name of the object store ('books' or 'movies').
+     * @param {object} item - The item object to add.
+     */
+    function addItem(storeName, item) {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.add(item);
+        request.onsuccess = () => {
+            console.log('Item added successfully.');
+        };
+        request.onerror = (event) => {
+            console.error('Add item error:', event.target.error);
+        };
+        transaction.oncomplete = () => {
+            loadAllData();
+        };
+    }
+
+    /**
+     * Deletes an item from an IndexedDB object store.
+     * @param {string} storeName - The name of the object store.
+     * @param {number} id - The id of the item to delete.
+     */
+    function deleteItem(storeName, id) {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.delete(id);
+        
+        request.onsuccess = () => {
+            console.log(`Item with ID ${id} deleted successfully.`);
+            loadAllData();
+            showMessage('Entry deleted successfully!', 'success');
+            hideModal(confirmationModal);
+        };
+
+        request.onerror = (event) => {
+            console.error('Delete item error:', event.target.error);
+            showMessage('Deletion failed.', 'error');
+            hideModal(confirmationModal);
+        };
+    }
+
+    /**
+     * Clears all data from both object stores.
+     */
+    function clearAllData() {
+        const transaction = db.transaction(['books', 'movies'], 'readwrite');
+        const booksStore = transaction.objectStore('books');
+        const moviesStore = transaction.objectStore('movies');
+
+        booksStore.clear();
+        moviesStore.clear();
+
+        transaction.oncomplete = () => {
+            console.log('All data cleared successfully.');
+            loadAllData();
+            showMessage('All data has been cleared!', 'success');
+        };
+
+        transaction.onerror = (event) => {
+            console.error('Clear all data error:', event.target.error);
+            showMessage('Failed to clear all data.', 'error');
+        };
+    }
+
+    /**
+     * Updates an item in an IndexedDB object store.
+     * @param {string} storeName - The name of the object store.
+     * @param {object} item - The updated item object.
+     */
+    function updateItem(storeName, item) {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.put(item);
+
+        request.onsuccess = () => {
+            console.log(`Item with ID ${item.id} updated successfully.`);
+            loadAllData();
+            showMessage('Entry updated successfully!', 'success');
+        };
+
+        request.onerror = (event) => {
+            console.error('Update item error:', event.target.error);
+            showMessage('Update failed.', 'error');
+        };
+    }
+    
+    /**
+     * Loads all data from both object stores and populates the global arrays.
+     */
+    async function loadAllData() {
+        try {
+            allBooks = await getAllItems('books');
+            allMovies = await getAllItems('movies');
+
+            // Sort by date descending
+            allBooks.sort((a, b) => new Date(b.date) - new Date(a.date));
+            allMovies.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Initialize filtered lists with all data
+            filteredBooks = [...allBooks];
+            filteredMovies = [...allMovies];
+
+            // Render the initial view for the active pane
+            const activePane = document.querySelector('.content-pane.active').id;
+            if (activePane === 'books-pane') {
+                applyFilters('books');
+            } else if (activePane === 'movies-pane') {
+                applyFilters('movies');
+            } else if (activePane === 'stats-pane') {
+                renderStats();
+            }
+            console.log('All data loaded and rendered.');
+        } catch (error) {
+            console.error('Error loading data:', error);
+        }
+    }
+
+    /**
+     * Renders a list of items to the specified DOM element with pagination.
+     * @param {string} type - 'books' or 'movies'.
+     */
+    function renderList(type) {
+        const listContainer = type === 'books' ? booksList : moviesList;
+        const totalCountEl = type === 'books' ? booksTotalCount : moviesTotalCount;
+        const currentPage = type === 'books' ? booksCurrentPage : moviesCurrentPage;
+        const items = type === 'books' ? filteredBooks : filteredMovies;
+        
+        listContainer.innerHTML = '';
+        totalCountEl.textContent = `Total ${type === 'books' ? 'Books Read' : 'Movies Watched'}: ${items.length}`;
+
+        if (items.length === 0) {
+            listContainer.innerHTML = '<p style="text-align: center; color: #888;">No items found.</p>';
+            booksPrevBtn.disabled = true;
+            booksNextBtn.disabled = true;
+            moviesPrevBtn.disabled = true;
+            moviesNextBtn.disabled = true;
+            return;
+        }
+
+        const totalPages = Math.ceil(items.length / itemsPerPage);
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const paginatedItems = items.slice(start, end);
+
+        paginatedItems.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            const details = document.createElement('div');
+            details.className = 'item-details';
+            details.innerHTML = `
+                <h4>${item.title}</h4>
+                <p>
+                    ${item.author ? `Author: ${item.author}` : `Director: ${item.director}`}
+                    ${item.rating ? ` | Rating: ${'★'.repeat(item.rating)}` : ''}
+                    ${item.date ? ` | Completed: ${new Date(item.date).toLocaleDateString()}` : ''}
+                </p>
+            `;
+
+            const actions = document.createElement('div');
+            actions.className = 'item-actions';
+            actions.innerHTML = `
+                <button class="edit-button" data-id="${item.id}" data-type="${type}">Edit</button>
+                <button class="delete-button" data-id="${item.id}" data-type="${type}">Delete</button>
+            `;
+
+            card.appendChild(details);
+            card.appendChild(actions);
+            listContainer.appendChild(card);
+        });
+        
+        // Update pagination buttons
+        const prevBtn = type === 'books' ? booksPrevBtn : moviesPrevBtn;
+        const nextBtn = type === 'books' ? booksNextBtn : moviesNextBtn;
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage >= totalPages;
+    }
+
+    /**
+     * Applies filters to the global data and updates the filtered array.
+     * @param {string} type - 'books' or 'movies'.
+     */
+    function applyFilters(type) {
+        const query = searchInput.value.toLowerCase();
+        let itemsToFilter = type === 'books' ? allBooks : allMovies;
+        let filteredItems = [...itemsToFilter];
+
+        // Apply general search filter first (title search)
+        if (query) {
+            filteredItems = filteredItems.filter(item => item.title.toLowerCase().includes(query));
+        }
+
+        // Apply specific pane filters
+        if (type === 'books') {
+            const author = booksFilterAuthor.value.toLowerCase();
+            const year = booksFilterYear.value;
+            const rating = booksFilterRating.value;
+
+            if (author) {
+                filteredItems = filteredItems.filter(item => item.author.toLowerCase().includes(author));
+            }
+            if (year) {
+                filteredItems = filteredItems.filter(item => new Date(item.date).getFullYear() === parseInt(year, 10));
+            }
+            if (rating) {
+                filteredItems = filteredItems.filter(item => item.rating === parseInt(rating, 10));
+            }
+            filteredBooks = filteredItems;
+            booksCurrentPage = 1; // Reset to first page on new filter
+        } else { // type === 'movies'
+            const director = moviesFilterDirector.value.toLowerCase();
+            const year = moviesFilterYear.value;
+            const rating = moviesFilterRating.value;
+
+            if (director) {
+                filteredItems = filteredItems.filter(item => item.director.toLowerCase().includes(director));
+            }
+            if (year) {
+                filteredItems = filteredItems.filter(item => new Date(item.date).getFullYear() === parseInt(year, 10));
+            }
+            if (rating) {
+                filteredItems = filteredItems.filter(item => item.rating === parseInt(rating, 10));
+            }
+            filteredMovies = filteredItems;
+            moviesCurrentPage = 1; // Reset to first page on new filter
+        }
+        
+        renderList(type);
+    }
+    
+    /**
+     * Renders the yearly statistics chart using the HTML canvas.
+     */
+    function renderStats() {
+        // Clear the canvas and reset transformations
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Data processing - get all years in range and their counts
+        const yearStats = {};
+        
+        // Populate stats for all years with data
+        allBooks.filter(book => !isNaN(new Date(book.date).getFullYear())).forEach(book => {
+            const year = new Date(book.date).getFullYear();
+            if (!yearStats[year]) yearStats[year] = { books: 0, movies: 0 };
+            yearStats[year].books++;
+        });
+
+        allMovies.filter(movie => !isNaN(new Date(movie.date).getFullYear())).forEach(movie => {
+            const year = new Date(movie.date).getFullYear();
+            if (!yearStats[year]) yearStats[year] = { books: 0, movies: 0 };
+            yearStats[year].movies++;
+        });
+
+        // Find the min and max year from the data
+        const allYearsWithData = Object.keys(yearStats).map(Number);
+        if (allYearsWithData.length === 0) {
+            // Re-adjust canvas width to fit container when no data
+            canvas.width = document.querySelector('.chart-container').offsetWidth;
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#888";
+            ctx.fillText("No data to display. Log some media entries!", canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        const minYear = Math.min(...allYearsWithData);
+        const maxYear = Math.max(...allYearsWithData);
+        
+        // Create a data array that includes all years between min and max
+        const data = [];
+        for (let i = minYear; i <= maxYear; i++) {
+            data.push({
+                year: i,
+                books: yearStats[i] ? yearStats[i].books : 0,
+                movies: yearStats[i] ? yearStats[i].movies : 0
+            });
+        }
+        
+        // --- DYNAMIC GRAPH WIDTH LOGIC ---
+        // Base width for each year step to ensure readability
+        const yearWidth = 80;
+        // Calculate dynamic width based on the number of years. Set a minimum for better initial view.
+        const dynamicWidth = Math.max(
+            document.querySelector('.chart-container').offsetWidth - margin.left - margin.right,
+            (data.length - 1) * yearWidth
+        );
+        canvas.width = dynamicWidth + margin.left + margin.right;
+        
+        const width = canvas.width - margin.left - margin.right;
+        // --- END OF DYNAMIC WIDTH LOGIC ---
+
+        // Apply a translation to account for the margin
+        ctx.translate(margin.left, margin.top);
+
+        // Find max count for Y-axis scale
+        const maxCount = Math.max(...data.map(d => Math.max(d.books, d.movies)));
+        const yMax = maxCount > 0 ? maxCount + Math.ceil(maxCount * 0.1) : 10;
+        
+        // Define scaling functions
+        const scaleX = (year) => {
+            const index = data.findIndex(d => d.year === year);
+            if (index === -1) return -1; // Not found
+            const step = width / (data.length - 1);
+            return index * step;
+        };
+
+        const scaleY = (count) => height - (count / yMax) * height;
+
+        // Draw axes
+        ctx.beginPath();
+        ctx.strokeStyle = "#ccc";
+        ctx.lineWidth = 1;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, height); // Y-axis
+        ctx.lineTo(width, height); // X-axis
+        ctx.stroke();
+
+        // Draw Y-axis labels
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "#555";
+        ctx.textAlign = "right";
+        for (let i = 0; i <= yMax; i += Math.max(1, Math.floor(yMax / 5))) {
+            const yPos = scaleY(i);
+            ctx.fillText(i, -10, yPos);
+            // Draw grid lines
+            ctx.beginPath();
+            ctx.strokeStyle = "#eee";
+            ctx.moveTo(0, yPos);
+            ctx.lineTo(width, yPos);
+            ctx.stroke();
+        }
+        
+        // Draw X-axis labels for every year
+        ctx.textAlign = "center";
+        data.forEach(d => {
+            const xPos = scaleX(d.year);
+            ctx.fillText(d.year, xPos, height + 20);
+        });
+
+        // Store drawn points for tooltip functionality
+        let points = [];
+
+        // Draw books line and points
+        ctx.beginPath();
+        ctx.strokeStyle = "#4caf50";
+        ctx.lineWidth = 2;
+        data.forEach((d, i) => {
+            const xPos = scaleX(d.year);
+            const yPos = scaleY(d.books);
+            points.push({ x: xPos, y: yPos, data: d, type: 'books' });
+
+            if (i === 0) {
+                ctx.moveTo(xPos, yPos);
+            } else {
+                ctx.lineTo(xPos, yPos);
+            }
+        });
+        ctx.stroke();
+
+        // Draw movies line and points
+        ctx.beginPath();
+        ctx.strokeStyle = "#f44336";
+        ctx.lineWidth = 2;
+        data.forEach((d, i) => {
+            const xPos = scaleX(d.year);
+            const yPos = scaleY(d.movies);
+            points.push({ x: xPos, y: yPos, data: d, type: 'movies' });
+            
+            if (i === 0) {
+                ctx.moveTo(xPos, yPos);
+            } else {
+                ctx.lineTo(xPos, yPos);
+            }
+        });
+        ctx.stroke();
+
+        // Draw circles on top of lines
+        points.forEach(p => {
+            ctx.beginPath();
+            ctx.fillStyle = p.type === 'books' ? '#4caf50' : '#f44336';
+            ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
+            ctx.fill();
+        });
+
+        // Add tooltip functionality
+        canvas.onmousemove = function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left - margin.left;
+            const mouseY = e.clientY - rect.top - margin.top;
+
+            let closestPoint = null;
+            let minDistance = 10; // Proximity in pixels
+
+            points.forEach(p => {
+                const distance = Math.sqrt(Math.pow(p.x - mouseX, 2) + Math.pow(p.y - mouseY, 2));
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestPoint = p;
+                }
+            });
+
+            if (closestPoint) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${e.clientX + 15}px`;
+                tooltip.style.top = `${e.clientY + 15}px`;
+                let content = `Year: ${closestPoint.data.year}<br>`;
+                if (closestPoint.type === 'books') {
+                    content += `Books: ${closestPoint.data.books}`;
+                } else {
+                    content += `Movies: ${closestPoint.data.movies}`;
+                }
+                tooltip.innerHTML = content;
+            } else {
+                tooltip.style.display = 'none';
+            }
+        };
+
+        canvas.onmouseleave = function() {
+            tooltip.style.display = 'none';
+        };
+
+        // Scroll to the end of the chart after rendering
+        const chartContainer = document.querySelector('.chart-container');
+        chartContainer.scrollLeft = chartContainer.scrollWidth;
+    }
+
+    /**
+     * Exports all data from IndexedDB to a JSON file.
+     * @returns {Promise<boolean>} True if export was successful, false otherwise.
+     */
+    async function exportData() {
+        try {
+            const books = await getAllItems('books');
+            const movies = await getAllItems('movies');
+            const data = { books, movies };
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'media-tracker-data.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            return true;
+        } catch (error) {
+            console.error('Export error:', error);
+            return false;
+        }
+    }
+
+
+    // Event listeners
+    
+    // Form submissions
+    bookForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const title = document.getElementById('book-title').value;
+        const author = document.getElementById('book-author').value;
+        const rating = parseInt(document.getElementById('book-rating').value, 10);
+        const date = document.getElementById('book-date').value || new Date().toISOString();
+        const book = { title, author, rating, date };
+        addItem('books', book);
+        bookForm.reset();
+        showMessage('Book added successfully!', 'success');
+    });
+
+    movieForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const title = document.getElementById('movie-title').value;
+        const director = document.getElementById('movie-director').value;
+        const rating = parseInt(document.getElementById('movie-rating').value, 10);
+        const date = document.getElementById('movie-date').value || new Date().toISOString();
+        const movie = { title, director, rating, date };
+        addItem('movies', movie);
+        movieForm.reset();
+        showMessage('Movie added successfully!', 'success');
+    });
+
+    // Edit form submissions
+    editBookForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('edit-book-id').value, 10);
+        const title = document.getElementById('edit-book-title').value;
+        const author = document.getElementById('edit-book-author').value;
+        const rating = parseInt(document.getElementById('edit-book-rating').value, 10);
+        const date = document.getElementById('edit-book-date').value || new Date().toISOString();
+        updateItem('books', { id, title, author, rating, date });
+        editBookForm.style.display = 'none';
+    });
+
+    editMovieForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('edit-movie-id').value, 10);
+        const title = document.getElementById('edit-movie-title').value;
+        const director = document.getElementById('edit-movie-director').value;
+        const rating = parseInt(document.getElementById('edit-movie-rating').value, 10);
+        const date = document.getElementById('edit-movie-date').value || new Date().toISOString();
+        updateItem('movies', { id, title, director, rating, date });
+        editMovieForm.style.display = 'none';
+    });
+    
+    // Cancel buttons for edit forms
+    document.getElementById('cancel-book-edit').addEventListener('click', () => {
+        editBookForm.style.display = 'none';
+    });
+
+    document.getElementById('cancel-movie-edit').addEventListener('click', () => {
+        editMovieForm.style.display = 'none';
+    });
+
+    // Tab switching
+    function switchPane(paneId) {
+        document.querySelectorAll('.content-pane').forEach(pane => pane.classList.remove('active'));
+        document.getElementById(`${paneId}-pane`).classList.add('active');
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`[onclick="switchPane('${paneId}')"]`).classList.add('active');
+        
+        // Hide edit forms when switching panes
+        editBookForm.style.display = 'none';
+        editMovieForm.style.display = 'none';
+        
+        // Render the new pane with its current filtered data
+        if (paneId === 'books') {
+            applyFilters('books');
+        } else if (paneId === 'movies') {
+            applyFilters('movies');
+        } else if (paneId === 'stats') {
+            renderStats();
+        }
+    }
+
+    // Search input listener
+    searchInput.addEventListener('input', () => {
+        const activePane = document.querySelector('.content-pane.active').id;
+        if (activePane === 'books-pane') {
+            applyFilters('books');
+        } else if (activePane === 'movies-pane') {
+            applyFilters('movies');
+        }
+    });
+
+    // Filter listeners
+    booksFilterAuthor.addEventListener('input', () => applyFilters('books'));
+    booksFilterYear.addEventListener('input', () => applyFilters('books'));
+    booksFilterRating.addEventListener('change', () => applyFilters('books'));
+    moviesFilterDirector.addEventListener('input', () => applyFilters('movies'));
+    moviesFilterYear.addEventListener('input', () => applyFilters('movies'));
+    moviesFilterRating.addEventListener('change', () => applyFilters('movies'));
+
+    // Pagination listeners
+    booksPrevBtn.addEventListener('click', () => {
+        if (booksCurrentPage > 1) {
+            booksCurrentPage--;
+            renderList('books');
+        }
+    });
+    
+    booksNextBtn.addEventListener('click', () => {
+        booksCurrentPage++;
+        renderList('books');
+    });
+
+    moviesPrevBtn.addEventListener('click', () => {
+        if (moviesCurrentPage > 1) {
+            moviesCurrentPage--;
+            renderList('movies');
+        }
+    });
+
+    moviesNextBtn.addEventListener('click', () => {
+        moviesCurrentPage++;
+        renderList('movies');
+    });
+    
+    // Event delegation for Edit and Delete buttons
+    document.addEventListener('click', (e) => {
+        const id = parseInt(e.target.getAttribute('data-id'), 10);
+        const type = e.target.getAttribute('data-type');
+        
+        if (e.target.classList.contains('delete-button')) {
+            // Show confirmation modal
+            itemToDelete.type = type;
+            itemToDelete.id = id;
+            showModal(confirmationModal);
+        } else if (e.target.classList.contains('edit-button')) {
+            // Open edit form
+            if (type === 'books') {
+                const item = allBooks.find(book => book.id === id);
+                document.getElementById('edit-book-id').value = item.id;
+                document.getElementById('edit-book-title').value = item.title;
+                document.getElementById('edit-book-author').value = item.author;
+                document.getElementById('edit-book-rating').value = item.rating;
+                document.getElementById('edit-book-date').value = item.date ? item.date.split('T')[0] : '';
+                editBookForm.style.display = 'flex';
+            } else if (type === 'movies') {
+                const item = allMovies.find(movie => movie.id === id);
+                document.getElementById('edit-movie-id').value = item.id;
+                document.getElementById('edit-movie-title').value = item.title;
+                document.getElementById('edit-movie-director').value = item.director;
+                document.getElementById('edit-movie-rating').value = item.rating;
+                document.getElementById('edit-movie-date').value = item.date ? item.date.split('T')[0] : '';
+                editMovieForm.style.display = 'flex';
+            }
+        }
+    });
+
+    // Confirmation modal button listeners
+    confirmDeleteBtn.addEventListener('click', () => {
+        if (itemToDelete.type && itemToDelete.id !== null) {
+            deleteItem(itemToDelete.type, itemToDelete.id);
+        }
+    });
+
+    cancelDeleteBtn.addEventListener('click', () => {
+        hideModal(confirmationModal);
+    });
+    
+    // The clear all button now correctly opens the dedicated clear all modal.
+    clearAllButton.addEventListener('click', () => {
+        showModal(clearAllModal);
+    });
+
+    confirmClearAllBtn.addEventListener('click', async () => {
+        showMessage('Exporting data before clearing...', 'success');
+        const exportSuccess = await exportData();
+        if (exportSuccess) {
+            clearAllData();
+        } else {
+            showMessage('Export failed. Data was NOT cleared.', 'error');
+        }
+        hideModal(clearAllModal);
+    });
+
+    cancelClearAllBtn.addEventListener('click', () => {
+        hideModal(clearAllModal);
+    });
+
+    /**
+     * Triggers the file input for importing data.
+     */
+    exportButton.addEventListener('click', async () => {
+        const exportSuccess = await exportData();
+        if (exportSuccess) {
+            showMessage('Data exported successfully!', 'success');
+        } else {
+            showMessage('Export failed. Check console for details.', 'error');
+        }
+    });
+
+
+    /**
+     * Triggers the file input for importing data.
+     */
+    importButton.addEventListener('click', () => {
+        importFileInput.click();
+    });
+
+    /**
+     * Handles the import of data from a JSON file.
+     */
+    importFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (data.books && data.movies) {
+                    await importAndReplaceData(data.books, 'books');
+                    await importAndReplaceData(data.movies, 'movies');
+                    showMessage('Data imported and updated successfully!', 'success');
+                } else {
+                    showMessage('Invalid file format.', 'error');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showMessage('Import failed. Invalid file format.', 'error');
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    /**
+     * Clears an object store and imports a new array of items.
+     * @param {Array} items - The array of items to import.
+     * @param {string} storeName - The name of the object store.
+     * @returns {Promise<void>} A promise that resolves when import is complete.
+     */
+    function importAndReplaceData(items, storeName) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([storeName], 'readwrite');
+            const store = transaction.objectStore(storeName);
+            
+            // Step 1: Clear the existing data
+            const clearRequest = store.clear();
+            
+            clearRequest.onsuccess = () => {
+                // Step 2: Add the new data
+                items.forEach(item => {
+                    store.put(item); // Use put() to handle potential duplicate IDs on import
+                });
+            };
+
+            transaction.oncomplete = () => {
+                console.log(`Import to ${storeName} successful.`);
+                loadAllData();
+                resolve();
+            };
+            transaction.onerror = (event) => {
+                console.error(`Import to ${storeName} failed:`, event.target.error);
+                reject(event.target.error);
+            };
+        });
+    }
+
+    // Initialize the application
+    initDb();
+
+</script>
+
+</body>
+</html>

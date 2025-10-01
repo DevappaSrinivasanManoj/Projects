@@ -1,0 +1,1507 @@
+import re
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+
+# For proportions tests, we use statsmodels:
+try:
+    from statsmodels.stats.proportion import proportions_ztest
+except ImportError:
+    raise ImportError("Please install statsmodels to run proportions tests (pip install statsmodels)")
+
+# -------------------------------------------------
+# Helper Calculation Functions (using built-in libraries)
+# -------------------------------------------------
+
+def calc_one_sample_means(data, pop_mean, pop_std):
+    n = len(data)
+    sample_mean = np.mean(data)
+    z = (sample_mean - pop_mean) / (pop_std/np.sqrt(n))
+    p_value = 2 * (1 - norm.cdf(abs(z)))
+    return z, p_value
+
+def calc_two_sample_means(data1, data2):
+    n1, n2 = len(data1), len(data2)
+    mean1, mean2 = np.mean(data1), np.mean(data2)
+    std1, std2 = np.std(data1, ddof=1), np.std(data2, ddof=1)
+    se = np.sqrt(std1**2/n1 + std2**2/n2)
+    z = (mean1 - mean2) / se
+    p_value = 2 * (1 - norm.cdf(abs(z)))
+    return z, p_value
+
+def calc_one_sample_prop(data, pop_prop):
+    n = len(data)
+    count = np.sum(data)  # assumes binary (0/1)
+    z, p_value = proportions_ztest(count, n, value=pop_prop, alternative='two-sided')
+    return z, p_value
+
+def calc_two_sample_prop(data1, data2):
+    n1, n2 = len(data1), len(data2)
+    count1, count2 = np.sum(data1), np.sum(data2)
+    z, p_value = proportions_ztest([count1, count2], [n1, n2], alternative='two-sided')
+    return z, p_value
+
+# -------------------------------------------------
+# UI Builder Functions for Each Test
+# -------------------------------------------------
+
+# 1. One Sample z-test (Means)
+def build_one_sample_z_means_ui():
+    # [Existing code unchanged]
+    # (see original version; not modified for file upload since it already has a CSV/Excel option)
+    # ... (code unchanged) ...
+    # (Code from your original one sample z-test is here.)
+    # For brevity, we assume this remains the same as in your file.
+    # (Refer to the code above.)
+    # Here we just return the container built in your original code.
+    # (This function is unchanged.)
+    mode_dd = widgets.Dropdown(options=["Data List", "Summary Statistics"], 
+                               value="Data List", description="Input Mode:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"],
+                               value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Greater Than", "Less Than"],
+                                    value="Greater Than", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd], layout=widgets.Layout(visibility='hidden'))
+    data_source = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"],
+                                       value="Upload CSV/Excel", description="Data Source:")
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    column_selector = widgets.Dropdown(options=[], description="Select Column:", style={'description_width': '150px'})
+    manual_text = widgets.Textarea(value="", placeholder="Enter numbers (comma separated)",
+                                   description="Data List:", layout=widgets.Layout(width='50%', height='80px'))
+    pop_mean_in = widgets.FloatText(value=0.0, description="Population Mean:", style={'description_width': '150px'})
+    pop_std_in = widgets.FloatText(value=1.0, description="Population Std Dev:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    data_list_box = widgets.VBox()
+    def update_data_source(change):
+        if data_source.value == "Upload CSV/Excel":
+            data_list_box.children = [file_upload, column_selector,
+                                      widgets.HTML("<b>Population Parameters:</b>"),
+                                      pop_mean_in, pop_std_in]
+        else:
+            data_list_box.children = [manual_text,
+                                      widgets.HTML("<b>Population Parameters:</b>"),
+                                      pop_mean_in, pop_std_in]
+    data_source.observe(update_data_source, names='value')
+    update_data_source(None)
+    sample_mean_in = widgets.FloatText(value=0.0, description="Sample Mean:", style={'description_width': '150px'})
+    sample_size_in = widgets.IntText(value=30, description="Sample Size:")
+    summary_box = widgets.VBox([widgets.HTML("<b>Enter Summary Statistics:</b>"),
+                                pop_mean_in, pop_std_in, sample_mean_in, sample_size_in])
+    container = widgets.VBox([mode_dd, tail_dd, direction_box, output_area])
+    def update_mode(change):
+        if mode_dd.value == "Data List":
+            container.children = (mode_dd, tail_dd, direction_box, data_source, data_list_box, sig_level_in, run_button, output_area)
+        else:
+            container.children = (mode_dd, tail_dd, direction_box, summary_box, sig_level_in, run_button, output_area)
+    mode_dd.observe(update_mode, names='value')
+    update_mode(None)
+    def update_tail_type(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail_type, names='value')
+    update_tail_type(None)
+    def update_column_selector(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+            except Exception:
+                try:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    with output_area:
+                        clear_output()
+                        print("Error reading file:", e)
+                    return
+            column_selector.options = list(df.columns)
+    file_upload.observe(update_column_selector, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                alpha = float(sig_level_in.value)
+            except Exception as e:
+                print("Invalid significance level:", e)
+                return
+            if mode_dd.value == "Data List":
+                if data_source.value == "Upload CSV/Excel":
+                    if file_upload.value:
+                        uploaded_file = list(file_upload.value.values())[0]
+                        try:
+                            try:
+                                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                            except:
+                                df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            return
+                        col = column_selector.value
+                        try:
+                            data = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
+                        except Exception as e:
+                            print("Error processing data:", e)
+                            return
+                    else:
+                        print("Please upload a file.")
+                        return
+                    pop_mean = pop_mean_in.value
+                    pop_std = pop_std_in.value
+                    z, p_val = calc_one_sample_means(data, pop_mean, pop_std)
+                    sample_mean_val = np.mean(data)
+                else:
+                    try:
+                        data = [float(x.strip()) for x in manual_text.value.split(",") if x.strip() != ""]
+                    except Exception as e:
+                        print("Error processing manual data:", e)
+                        return
+                    pop_mean = pop_mean_in.value
+                    pop_std = pop_std_in.value
+                    z, p_val = calc_one_sample_means(data, pop_mean, pop_std)
+                    sample_mean_val = np.mean(data)
+            else:
+                pop_mean = pop_mean_in.value
+                pop_std = pop_std_in.value
+                sample_mean_val = sample_mean_in.value
+                n = sample_size_in.value
+                z = (sample_mean_val - pop_mean) / (pop_std / np.sqrt(n))
+                p_val = 2 * (1 - norm.cdf(abs(z)))
+            if tail_dd.value == "One Tailed":
+                direction = direction_dd.value
+                if direction == "Greater Than":
+                    p = 1 - norm.cdf(z)
+                    if p < alpha:
+                        result_message = (f"The sample mean ({sample_mean_val}) is statistically greater than the population mean ({pop_mean}).")
+                    else:
+                        result_message = (f"The sample mean ({sample_mean_val}) is NOT statistically greater than the population mean ({pop_mean}).")
+                else:
+                    p = norm.cdf(z)
+                    if p < alpha:
+                        result_message = (f"The sample mean ({sample_mean_val}) is statistically less than the population mean ({pop_mean}).")
+                    else:
+                        result_message = (f"The sample mean ({sample_mean_val}) is NOT statistically less than the population mean ({pop_mean}).")
+            else:
+                p = p_val
+                if p < alpha:
+                    result_message = (f"There is a statistically significant difference between the sample mean ({sample_mean_val}) and the population mean ({pop_mean}).")
+                else:
+                    result_message = (f"There is NO statistically significant difference between the sample mean ({sample_mean_val}) and the population mean ({pop_mean}).")
+            print("One Sample z-test (Means):")
+            print("z statistic:", z)
+            print("p-value:", p)
+            print(result_message)
+            print(f"At a significance level of {alpha}, we {'reject' if p < alpha else 'fail to reject'} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 2. Two Sample z-test (Means)
+def build_two_sample_z_means_ui():
+    mode_dd = widgets.Dropdown(options=["Data List", "Summary Statistics"],
+                               value="Data List", description="Input Mode:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"],
+                               value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=[("Sample1 > Sample2", "gt"), ("Sample1 < Sample2", "lt")],
+                                    value="gt", description="Direction:", style={'description_width': '150px'})
+    direction_dd.layout.display = 'none'
+    data_source = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"],
+                                        value="Upload CSV/Excel", description="Data Source:")
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    col_sel1 = widgets.Dropdown(options=[], description="Column S1:")
+    col_sel2 = widgets.Dropdown(options=[], description="Column S2:")
+    manual_text = widgets.Textarea(value="", placeholder="Enter two lists (e.g., [1,2,3], [4,5,6])",
+                                   description="Data Lists:", layout=widgets.Layout(width='70%', height='100px'))
+    s1_mean = widgets.FloatText(value=0.0, description="Sample 1 Mean:", style={'description_width': '150px'})
+    s1_std = widgets.FloatText(value=1.0, description="Sample 1 Std Dev:", style={'description_width': '150px'})
+    s1_size = widgets.IntText(value=30, description="Sample 1 Size:", style={'description_width': '150px'})
+    s2_mean = widgets.FloatText(value=0.0, description="Sample 2 Mean:", style={'description_width': '150px'})
+    s2_std = widgets.FloatText(value=1.0, description="Sample 2 Std Dev:", style={'description_width': '150px'})
+    s2_size = widgets.IntText(value=30, description="Sample 2 Size:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    data_list_box = widgets.VBox()
+    def update_data_source(change):
+        if data_source.value == "Upload CSV/Excel":
+            data_list_box.children = [file_upload, widgets.HBox([col_sel1, col_sel2])]
+        else:
+            data_list_box.children = [manual_text]
+    data_source.observe(update_data_source, names='value')
+    update_data_source(None)
+    summary_box = widgets.VBox([s1_mean, s1_std, s1_size, s2_mean, s2_std, s2_size])
+    container = widgets.VBox([mode_dd, tail_dd, output_area])
+    def update_mode(change):
+        if tail_dd.value == "One Tailed":
+            direction_dd.layout.display = 'block'
+        else:
+            direction_dd.layout.display = 'none'
+        if mode_dd.value == "Data List":
+            container.children = (mode_dd, tail_dd, direction_dd, data_source, data_list_box, sig_level_in, run_button, output_area)
+        else:
+            container.children = (mode_dd, tail_dd, direction_dd, summary_box, sig_level_in, run_button, output_area)
+    mode_dd.observe(update_mode, names='value')
+    tail_dd.observe(update_mode, names='value')
+    update_mode(None)
+    def update_col_selectors(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+            except Exception:
+                try:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    with output_area:
+                        clear_output()
+                        print("Error reading file:", e)
+                    return
+            options = list(df.columns)
+            col_sel1.options = options
+            col_sel2.options = options
+    file_upload.observe(update_col_selectors, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                alpha = float(sig_level_in.value)
+            except Exception as e:
+                print("Invalid significance level:", e)
+                return
+            if mode_dd.value == "Data List":
+                if data_source.value == "Upload CSV/Excel":
+                    if file_upload.value:
+                        uploaded_file = list(file_upload.value.values())[0]
+                        try:
+                            try:
+                                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                            except:
+                                df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            return
+                        col1 = col_sel1.value
+                        col2 = col_sel2.value
+                        try:
+                            data1 = pd.to_numeric(df[col1], errors='coerce').dropna().tolist()
+                            data2 = pd.to_numeric(df[col2], errors='coerce').dropna().tolist()
+                        except Exception as e:
+                            print("Error processing data:", e)
+                            return
+                    else:
+                        print("Please upload a file.")
+                        return
+                    z, p_val = calc_two_sample_means(data1, data2)
+                else:
+                    try:
+                        lists_found = re.findall(r'\[([^\]]+)\]', manual_text.value)
+                        if len(lists_found) != 2:
+                            print("Enter exactly two lists separated by a comma.")
+                            return
+                        data1 = [float(x.strip()) for x in lists_found[0].split(",") if x.strip() != ""]
+                        data2 = [float(x.strip()) for x in lists_found[1].split(",") if x.strip() != ""]
+                    except Exception as e:
+                        print("Error processing manual data:", e)
+                        return
+                    z, p_val = calc_two_sample_means(data1, data2)
+            else:
+                z = (s1_mean.value - s2_mean.value) / np.sqrt(s1_std.value**2/s1_size.value + s2_std.value**2/s2_size.value)
+                p_val = 2 * (1 - norm.cdf(abs(z)))
+            if tail_dd.value == "One Tailed":
+                direction_choice = direction_dd.value
+                if direction_choice == "gt":
+                    p = 1 - norm.cdf(z)
+                    outcome = "Sample 1 is statistically greater than Sample 2." if z > 0 else "No evidence that Sample 1 is greater than Sample 2."
+                else:
+                    p = norm.cdf(z)
+                    outcome = "Sample 1 is statistically less than Sample 2." if z < 0 else "No evidence that Sample 1 is less than Sample 2."
+            else:
+                p = p_val
+                if p < alpha:
+                    outcome = "There is a statistically significant difference between the two samples."
+                else:
+                    outcome = "There is no statistically significant difference between the two samples."
+            decision = "reject" if p < alpha else "fail to reject"
+            print("Two Sample z-test (Means):")
+            print("z statistic:", z)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At a significance level of {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 3. One Sample z-proportions test (code remains similar)
+def build_one_sample_z_proportions_ui():
+    # (Original code with upload/manual option remains unchanged)
+    pop_prop_in = widgets.FloatText(value=0.5, description="Population Proportion:", style={'description_width': '150px'})
+    mode_dd = widgets.Dropdown(options=["Data List", "Summary Statistics"], value="Data List", description="Input Mode:", style={'description_width': '150px'})
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=[("Sample proportion > Population proportion", "gt"),
+                                              ("Sample proportion < Population proportion", "lt")],
+                                    value="gt", description="Direction:", style={'description_width': '150px'}, layout=widgets.Layout(width='100%'))
+    direction_dd.layout.display = 'none'
+    data_source = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"], value="Upload CSV/Excel", description="Data Source:", style={'description_width': '150px'})
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    column_selector = widgets.Dropdown(options=[], description="Select Column:", style={'description_width': '150px'})
+    manual_text = widgets.Textarea(value="", placeholder="Enter binary data (0/1) separated by commas", description="Data List:", layout=widgets.Layout(width='50%', height='80px'))
+    data_list_box = widgets.VBox([], layout=widgets.Layout(width='100%'))
+    def update_data_source(change):
+        if data_source.value == "Upload CSV/Excel":
+            data_list_box.children = [file_upload, column_selector]
+        else:
+            data_list_box.children = [manual_text]
+    data_source.observe(update_data_source, names='value')
+    update_data_source(None)
+    sample_prop_in = widgets.FloatText(value=0.0, description="Sample Proportion:", style={'description_width': '150px'})
+    sample_size_in = widgets.IntText(value=30, description="Sample Size:", style={'description_width': '150px'})
+    summary_box = widgets.VBox([widgets.HTML("<b>Summary Statistics for Proportions:</b>"), pop_prop_in, sample_prop_in, sample_size_in], layout=widgets.Layout(width='100%'))
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output(layout=widgets.Layout(width='100%'))
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    def update_main_container():
+        rows = []
+        rows.append(mode_dd)
+        rows.append(tail_dd)
+        if tail_dd.value == "One Tailed":
+            rows.append(direction_dd)
+        if mode_dd.value == "Data List":
+            rows.append(data_source)
+            rows.append(data_list_box)
+        else:
+            rows.append(summary_box)
+        rows.append(sig_level_in)
+        rows.append(run_button)
+        rows.append(output_area)
+        return widgets.VBox(rows)
+    container = update_main_container()
+    def update_layout(change):
+        if tail_dd.value == "One Tailed":
+            direction_dd.layout.display = 'block'
+        else:
+            direction_dd.layout.display = 'none'
+        new_container = update_main_container()
+        container.children = new_container.children
+    mode_dd.observe(update_layout, names='value')
+    tail_dd.observe(update_layout, names='value')
+    update_layout(None)
+    def update_column_selector(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+            except Exception:
+                try:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    with output_area:
+                        clear_output()
+                        print("Error reading file:", e)
+                    return
+            column_selector.options = list(df.columns)
+    file_upload.observe(update_column_selector, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                alpha = float(sig_level_in.value)
+            except Exception as e:
+                print("Invalid significance level:", e)
+                return
+            if mode_dd.value == "Data List":
+                if data_source.value == "Upload CSV/Excel":
+                    if file_upload.value:
+                        uploaded_file = list(file_upload.value.values())[0]
+                        try:
+                            try:
+                                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                            except:
+                                df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            return
+                        col = column_selector.value
+                        try:
+                            data = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
+                        except Exception as e:
+                            print("Error processing data:", e)
+                            return
+                    else:
+                        print("Please upload a file.")
+                        return
+                    pop_prop = pop_prop_in.value
+                    z, computed_p = calc_one_sample_prop(data, pop_prop)
+                    sample_prop_val = np.mean(data)
+                else:
+                    try:
+                        data = [float(x.strip()) for x in manual_text.value.split(",") if x.strip() != ""]
+                    except Exception as e:
+                        print("Error processing manual data:", e)
+                        return
+                    pop_prop = pop_prop_in.value
+                    z, computed_p = calc_one_sample_prop(data, pop_prop)
+                    sample_prop_val = np.mean(data)
+            else:
+                pop_prop = pop_prop_in.value
+                sample_prop_val = sample_prop_in.value
+                n = sample_size_in.value
+                se = np.sqrt(pop_prop * (1 - pop_prop) / n)
+                z = (sample_prop_val - pop_prop) / se
+                computed_p = 2 * (1 - norm.cdf(abs(z)))
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "gt":
+                    p = 1 - norm.cdf(z)
+                    outcome = ("The sample proportion is statistically greater than the population proportion." if z > 0 else "Insufficient evidence for a greater proportion.")
+                else:
+                    p = norm.cdf(z)
+                    outcome = ("The sample proportion is statistically less than the population proportion." if z < 0 else "Insufficient evidence for a lesser proportion.")
+            else:
+                p = computed_p
+                if p < alpha:
+                    outcome = "There is a statistically significant difference between the sample and population proportions."
+                else:
+                    outcome = "No statistically significant difference between the sample and population proportions."
+            decision = "reject" if p < alpha else "fail to reject"
+            print("One Sample z-proportions test:")
+            print("z statistic:", z)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 4. Two Sample z-proportions test (code remains similar)
+def build_two_sample_z_proportions_ui():
+    import re
+    import numpy as np
+    import pandas as pd
+    from scipy.stats import norm
+    from statsmodels.stats.proportion import proportions_ztest
+    mode_dd = widgets.Dropdown(options=["Data List", "Summary Statistics"], value="Data List", description="Input Mode:", style={'description_width': '150px'})
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=[("Sample1 > Sample2", "gt"), ("Sample1 < Sample2", "lt")],
+                                    value="gt", description="Direction:", style={'description_width': '150px'})
+    direction_dd.layout.display = 'none'
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    data_source = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"], value="Upload CSV/Excel", description="Data Source:", style={'description_width': '150px'})
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    col_sel1 = widgets.Dropdown(options=[], description="Column S1:", style={'description_width': '150px'})
+    col_sel2 = widgets.Dropdown(options=[], description="Column S2:", style={'description_width': '150px'})
+    manual_text = widgets.Textarea(value="", placeholder="Enter two lists (e.g., [1,0,1], [0,1,1])", description="Data Lists:", layout=widgets.Layout(width='70%', height='100px'))
+    data_list_box = widgets.VBox()
+    def update_data_source(change):
+        if data_source.value == "Upload CSV/Excel":
+            data_list_box.children = [file_upload, widgets.HBox([col_sel1, col_sel2])]
+        else:
+            data_list_box.children = [manual_text]
+    data_source.observe(update_data_source, names='value')
+    update_data_source(None)
+    s1_prop = widgets.FloatText(value=0.0, description="Sample 1 Proportion:", style={'description_width': '150px'})
+    s1_size = widgets.IntText(value=30, description="Sample 1 Size:", style={'description_width': '150px'})
+    s2_prop = widgets.FloatText(value=0.0, description="Sample 2 Proportion:", style={'description_width': '150px'})
+    s2_size = widgets.IntText(value=30, description="Sample 2 Size:", style={'description_width': '150px'})
+    summary_box = widgets.VBox([widgets.HTML("<b>Summary Statistics for Proportions:</b>"), s1_prop, s1_size, s2_prop, s2_size])
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    def update_main_container():
+        rows = []
+        rows.append(mode_dd)
+        rows.append(tail_dd)
+        if tail_dd.value == "One Tailed":
+            rows.append(direction_dd)
+        if mode_dd.value == "Data List":
+            rows.append(data_source)
+            rows.append(data_list_box)
+        else:
+            rows.append(summary_box)
+        rows.append(sig_level_in)
+        rows.append(run_button)
+        rows.append(output_area)
+        return widgets.VBox(rows)
+    container = update_main_container()
+    def update_layout(change):
+        if tail_dd.value == "One Tailed":
+            direction_dd.layout.display = 'block'
+        else:
+            direction_dd.layout.display = 'none'
+        new_container = update_main_container()
+        container.children = new_container.children
+    mode_dd.observe(update_layout, names='value')
+    tail_dd.observe(update_layout, names='value')
+    update_layout(None)
+    def update_col_selectors(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+            except Exception:
+                try:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    with output_area:
+                        clear_output()
+                        print("Error reading file:", e)
+                    return
+            options = list(df.columns)
+            col_sel1.options = options
+            col_sel2.options = options
+    file_upload.observe(update_col_selectors, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                alpha = float(sig_level_in.value)
+            except Exception as e:
+                print("Invalid significance level:", e)
+                return
+            if mode_dd.value == "Data List":
+                if data_source.value == "Upload CSV/Excel":
+                    if file_upload.value:
+                        uploaded_file = list(file_upload.value.values())[0]
+                        try:
+                            try:
+                                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                            except:
+                                df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            return
+                        col1 = col_sel1.value
+                        col2 = col_sel2.value
+                        try:
+                            data1 = pd.to_numeric(df[col1], errors='coerce').dropna().tolist()
+                            data2 = pd.to_numeric(df[col2], errors='coerce').dropna().tolist()
+                        except Exception as e:
+                            print("Error processing data:", e)
+                            return
+                    else:
+                        print("Please upload a file.")
+                        return
+                    count1 = np.sum(np.array(data1) == 1)
+                    count2 = np.sum(np.array(data2) == 1)
+                    n1 = len(data1)
+                    n2 = len(data2)
+                    z, computed_p = proportions_ztest([count1, count2], [n1, n2], alternative='two-sided')
+                else:
+                    try:
+                        lists_found = re.findall(r'\[([^\]]+)\]', manual_text.value)
+                        if len(lists_found) != 2:
+                            print("Enter exactly two lists with brackets separated by a comma.")
+                            return
+                        data1 = [float(x.strip()) for x in lists_found[0].split(",") if x.strip() != ""]
+                        data2 = [float(x.strip()) for x in lists_found[1].split(",") if x.strip() != ""]
+                    except Exception as e:
+                        print("Error processing manual data:", e)
+                        return
+                    count1 = np.sum(np.array(data1) == 1)
+                    count2 = np.sum(np.array(data2) == 1)
+                    n1 = len(data1)
+                    n2 = len(data2)
+                    z, computed_p = proportions_ztest([count1, count2], [n1, n2], alternative='two-sided')
+            else:
+                count1 = s1_prop.value * s1_size.value
+                count2 = s2_prop.value * s2_size.value
+                n1 = s1_size.value
+                n2 = s2_size.value
+                z, computed_p = proportions_ztest([count1, count2], [n1, n2], alternative='two-sided')
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "gt":
+                    p = 1 - norm.cdf(z)
+                    outcome = "Sample 1 is statistically greater than Sample 2." if z > 0 else "No evidence that Sample 1 is greater than Sample 2."
+                else:
+                    p = norm.cdf(z)
+                    outcome = "Sample 1 is statistically less than Sample 2." if z < 0 else "No evidence that Sample 1 is less than Sample 2."
+            else:
+                p = computed_p
+                if p < alpha:
+                    outcome = "There is a statistically significant difference between the two samples."
+                else:
+                    outcome = "There is no statistically significant difference between the two samples."
+            decision = "reject" if p < alpha else "fail to reject"
+            print("Two Sample z-proportions test:")
+            print("z statistic:", z)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 5. Fisher's Exact Test
+def build_fishers_exact_test_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import fisher_exact
+    a_in = widgets.IntText(value=10, description="a:", style={'description_width': '50px'})
+    b_in = widgets.IntText(value=5, description="b:", style={'description_width': '50px'})
+    c_in = widgets.IntText(value=3, description="c:", style={'description_width': '50px'})
+    d_in = widgets.IntText(value=8, description="d:", style={'description_width': '50px'})
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Greater", "Less"], value="Greater", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd])
+    def update_tail(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail, names='value')
+    update_tail(None)
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([widgets.HBox([a_in, b_in]), widgets.HBox([c_in, d_in]), tail_dd, direction_box, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            table = [[a_in.value, b_in.value], [c_in.value, d_in.value]]
+            alpha = sig_level_in.value
+            if tail_dd.value == "Two Tailed":
+                alternative = 'two-sided'
+            else:
+                alternative = 'greater' if direction_dd.value == "Greater" else 'less'
+            oddsratio, p_val = fisher_exact(table, alternative=alternative)
+            result_message = "Reject the null hypothesis" if p_val < alpha else "Fail to reject the null hypothesis"
+            print("Fisher's Exact Test:")
+            print("Odds Ratio:", oddsratio)
+            print("p-value:", p_val)
+            print(result_message)
+    run_button.on_click(run_test_action)
+    return container
+
+# 6. One Sample T-test (with Excel upload option)
+def build_one_sample_t_test_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import ttest_1samp, t
+    import numpy as np
+    mode_dd = widgets.Dropdown(options=["Data List", "Summary Statistics"], value="Data List", description="Input Mode:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Greater", "Less"], value="Greater", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd])
+    def update_tail(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail, names='value')
+    update_tail(None)
+    pop_mean_in = widgets.FloatText(value=0.0, description="Hypothesized Mean:", style={'description_width': '150px'})
+    # Add Data Source option
+    data_source = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"], value="Upload CSV/Excel", description="Data Source:")
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    column_selector = widgets.Dropdown(options=[], description="Select Column:", style={'description_width': '150px'})
+    manual_text = widgets.Textarea(value="", placeholder="Enter numbers separated by commas", description="Data List:", layout=widgets.Layout(width='50%', height='80px'))
+    data_list_box = widgets.VBox()
+    def update_data_source(change):
+        if data_source.value == "Upload CSV/Excel":
+            data_list_box.children = [file_upload, column_selector]
+        else:
+            data_list_box.children = [manual_text]
+    data_source.observe(update_data_source, names='value')
+    update_data_source(None)
+    sample_mean_in = widgets.FloatText(value=0.0, description="Sample Mean:", style={'description_width': '150px'})
+    sample_std_in = widgets.FloatText(value=1.0, description="Sample Std Dev:", style={'description_width': '150px'})
+    sample_size_in = widgets.IntText(value=30, description="Sample Size:", style={'description_width': '150px'})
+    summary_box = widgets.VBox([sample_mean_in, sample_std_in, sample_size_in])
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([mode_dd, tail_dd, direction_box, pop_mean_in, sig_level_in, run_button, output_area])
+    def update_mode(change):
+        if mode_dd.value == "Data List":
+            container.children = [mode_dd, tail_dd, direction_box, pop_mean_in, data_source, data_list_box, sig_level_in, run_button, output_area]
+        else:
+            container.children = [mode_dd, tail_dd, direction_box, pop_mean_in, summary_box, sig_level_in, run_button, output_area]
+    mode_dd.observe(update_mode, names='value')
+    update_mode(None)
+    def update_column_selector(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+            except Exception:
+                try:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    with output_area:
+                        clear_output()
+                        print("Error reading file:", e)
+                    return
+            column_selector.options = list(df.columns)
+    file_upload.observe(update_column_selector, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            alpha = sig_level_in.value
+            mu0 = pop_mean_in.value
+            if mode_dd.value == "Data List":
+                if data_source.value == "Upload CSV/Excel":
+                    if file_upload.value:
+                        uploaded_file = list(file_upload.value.values())[0]
+                        try:
+                            try:
+                                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                            except:
+                                df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            return
+                        col = column_selector.value
+                        try:
+                            data = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
+                        except Exception as e:
+                            print("Error processing data:", e)
+                            return
+                    else:
+                        print("Please upload a file.")
+                        return
+                    t_stat, p_val = ttest_1samp(data, mu0)
+                    sample_mean_val = np.mean(data)
+                    df_val = len(data) - 1
+                else:
+                    try:
+                        data = [float(x.strip()) for x in manual_text.value.split(",") if x.strip() != ""]
+                    except Exception as e:
+                        print("Error processing manual data:", e)
+                        return
+                    t_stat, p_val = ttest_1samp(data, mu0)
+                    sample_mean_val = np.mean(data)
+                    df_val = len(data) - 1
+            else:
+                mean_val = sample_mean_in.value
+                std_val = sample_std_in.value
+                n = sample_size_in.value
+                t_stat = (mean_val - mu0) / (std_val / np.sqrt(n))
+                df_val = n - 1
+                p_val = 2 * (1 - t.cdf(abs(t_stat), df=df_val))
+                sample_mean_val = mean_val
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "Greater":
+                    p = 1 - t.cdf(t_stat, df=df_val)
+                    outcome = f"Sample mean ({sample_mean_val}) is significantly greater than {mu0}" if p < alpha else f"No evidence that sample mean is greater than {mu0}"
+                else:
+                    p = t.cdf(t_stat, df=df_val)
+                    outcome = f"Sample mean ({sample_mean_val}) is significantly less than {mu0}" if p < alpha else f"No evidence that sample mean is less than {mu0}"
+            else:
+                p = p_val
+                outcome = f"Sample mean ({sample_mean_val}) is significantly different from {mu0}" if p < alpha else f"No significant difference between sample mean and {mu0}"
+            decision = "reject" if p < alpha else "fail to reject"
+            print("One Sample T-test:")
+            print("t statistic:", t_stat)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 7. Two Sample T-test (with Excel upload option)
+def build_two_sample_t_test_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import ttest_ind, t
+    import numpy as np
+    mode_dd = widgets.Dropdown(options=["Data List", "Summary Statistics"], value="Data List", description="Input Mode:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Sample1 > Sample2", "Sample1 < Sample2"], value="Sample1 > Sample2", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd])
+    def update_tail(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail, names='value')
+    update_tail(None)
+    data_source = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"], value="Upload CSV/Excel", description="Data Source:")
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    col_sel1 = widgets.Dropdown(options=[], description="Column S1:", style={'description_width': '150px'})
+    col_sel2 = widgets.Dropdown(options=[], description="Column S2:", style={'description_width': '150px'})
+    manual_text = widgets.Textarea(value="", placeholder="Enter numbers for Sample 1 and Sample 2 separated by brackets", description="Data Lists:", layout=widgets.Layout(width='70%', height='100px'))
+    data_list_box = widgets.VBox()
+    def update_data_source(change):
+        if data_source.value == "Upload CSV/Excel":
+            data_list_box.children = [file_upload, widgets.HBox([col_sel1, col_sel2])]
+        else:
+            data_list_box.children = [manual_text]
+    data_source.observe(update_data_source, names='value')
+    update_data_source(None)
+    s1_mean = widgets.FloatText(value=0.0, description="Sample 1 Mean:", style={'description_width': '150px'})
+    s1_std = widgets.FloatText(value=1.0, description="Sample 1 Std Dev:", style={'description_width': '150px'})
+    s1_size = widgets.IntText(value=30, description="Sample 1 Size:", style={'description_width': '150px'})
+    s2_mean = widgets.FloatText(value=0.0, description="Sample 2 Mean:", style={'description_width': '150px'})
+    s2_std = widgets.FloatText(value=1.0, description="Sample 2 Std Dev:", style={'description_width': '150px'})
+    s2_size = widgets.IntText(value=30, description="Sample 2 Size:", style={'description_width': '150px'})
+    summary_box = widgets.VBox([s1_mean, s1_std, s1_size, s2_mean, s2_std, s2_size])
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([mode_dd, tail_dd, direction_box, sig_level_in, run_button, output_area])
+    def update_mode(change):
+        if mode_dd.value == "Data List":
+            container.children = [mode_dd, tail_dd, direction_box, data_source, data_list_box, sig_level_in, run_button, output_area]
+        else:
+            container.children = [mode_dd, tail_dd, direction_box, summary_box, sig_level_in, run_button, output_area]
+    mode_dd.observe(update_mode, names='value')
+    update_mode(None)
+    def update_col_selectors(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+            except Exception:
+                try:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    with output_area:
+                        clear_output()
+                        print("Error reading file:", e)
+                    return
+            options = list(df.columns)
+            col_sel1.options = options
+            col_sel2.options = options
+    file_upload.observe(update_col_selectors, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            alpha = sig_level_in.value
+            if mode_dd.value == "Data List":
+                if data_source.value == "Upload CSV/Excel":
+                    if file_upload.value:
+                        uploaded_file = list(file_upload.value.values())[0]
+                        try:
+                            try:
+                                df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                            except:
+                                df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                        except Exception as e:
+                            print("Error reading file:", e)
+                            return
+                        col1 = col_sel1.value
+                        col2 = col_sel2.value
+                        try:
+                            data1 = pd.to_numeric(df[col1], errors='coerce').dropna().tolist()
+                            data2 = pd.to_numeric(df[col2], errors='coerce').dropna().tolist()
+                        except Exception as e:
+                            print("Error processing data:", e)
+                            return
+                    else:
+                        print("Please upload a file.")
+                        return
+                    t_stat, p_val = ttest_ind(data1, data2, equal_var=False)
+                    mean1 = np.mean(data1)
+                    mean2 = np.mean(data2)
+                    df_val = (len(data1) + len(data2) - 2)
+                else:
+                    try:
+                        lists_found = re.findall(r'\[([^\]]+)\]', manual_text.value)
+                        if len(lists_found) != 2:
+                            print("Enter exactly two lists separated by a comma.")
+                            return
+                        data1 = [float(x.strip()) for x in lists_found[0].split(",") if x.strip() != ""]
+                        data2 = [float(x.strip()) for x in lists_found[1].split(",") if x.strip() != ""]
+                    except Exception as e:
+                        print("Error processing manual data:", e)
+                        return
+                    t_stat, p_val = ttest_ind(data1, data2, equal_var=False)
+                    mean1 = np.mean(data1)
+                    mean2 = np.mean(data2)
+                    df_val = (len(data1) + len(data2) - 2)
+            else:
+                mean1, std1, n1 = s1_mean.value, s1_std.value, s1_size.value
+                mean2, std2, n2 = s2_mean.value, s2_std.value, s2_size.value
+                t_stat = (mean1 - mean2) / np.sqrt(std1**2/n1 + std2**2/n2)
+                df_val = min(n1 - 1, n2 - 1)
+                p_val = 2 * (1 - t.cdf(abs(t_stat), df=df_val))
+                mean1, mean2 = s1_mean.value, s2_mean.value
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "Sample1 > Sample2":
+                    p = 1 - t.cdf(t_stat, df=df_val)
+                    outcome = f"Sample 1 mean ({mean1}) is significantly greater than Sample 2 mean ({mean2})" if p < alpha else "No evidence that Sample 1 > Sample 2"
+                else:
+                    p = t.cdf(t_stat, df=df_val)
+                    outcome = f"Sample 1 mean ({mean1}) is significantly less than Sample 2 mean ({mean2})" if p < alpha else "No evidence that Sample 1 < Sample 2"
+            else:
+                p = p_val
+                outcome = "There is a significant difference between the two samples" if p < alpha else "No significant difference between the samples"
+            decision = "reject" if p < alpha else "fail to reject"
+            print("Two Sample T-test:")
+            print("t statistic:", t_stat)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 8. Paired T-test (remains similar; manual entry only for paired data)
+def build_paired_t_test_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import ttest_rel, t
+    import numpy as np
+    mode_dd = widgets.Dropdown(options=["Data List"], value="Data List", description="Input Mode:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Before < After", "Before > After"], value="Before < After", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd])
+    def update_tail(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail, names='value')
+    update_tail(None)
+    data_before = widgets.Textarea(value="", placeholder="Enter paired values for Before (comma separated)", description="Before:")
+    data_after = widgets.Textarea(value="", placeholder="Enter paired values for After (comma separated)", description="After:")
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([mode_dd, tail_dd, direction_box, data_before, data_after, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            alpha = sig_level_in.value
+            try:
+                before = [float(x.strip()) for x in data_before.value.split(",") if x.strip() != ""]
+                after = [float(x.strip()) for x in data_after.value.split(",") if x.strip() != ""]
+            except Exception as e:
+                print("Error processing data:", e)
+                return
+            t_stat, p_val = ttest_rel(before, after)
+            df_val = len(before) - 1
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "Before < After":
+                    p = 1 - t.cdf(t_stat, df=df_val)
+                    outcome = "After values are significantly greater than before values" if p < alpha else "No evidence that after > before"
+                else:
+                    p = t.cdf(t_stat, df=df_val)
+                    outcome = "Before values are significantly greater than after values" if p < alpha else "No evidence that before > after"
+            else:
+                p = p_val
+                outcome = "There is a significant difference between paired samples" if p < alpha else "No significant difference between paired samples"
+            decision = "reject" if p < alpha else "fail to reject"
+            print("Paired T-test:")
+            print("t statistic:", t_stat)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 9. Chi-square Goodness of Fit Test
+def build_chi_square_goodness_of_fit_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import chisquare
+    obs_text = widgets.Textarea(value="", placeholder="Enter observed frequencies separated by commas", description="Observed:")
+    exp_text = widgets.Textarea(value="", placeholder="Enter expected frequencies separated by commas (optional)", description="Expected:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([obs_text, exp_text, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                obs = [float(x.strip()) for x in obs_text.value.split(",") if x.strip() != ""]
+            except Exception as e:
+                print("Error processing observed frequencies:", e)
+                return
+            try:
+                exp = [float(x.strip()) for x in exp_text.value.split(",") if x.strip() != ""]
+                if len(exp) != len(obs):
+                    print("The number of expected values must match observed values.")
+                    return
+            except Exception:
+                exp = None
+            stat, p_val = chisquare(f_obs=obs, f_exp=exp)
+            alpha = sig_level_in.value
+            outcome = "Significant difference found" if p_val < alpha else "No significant difference"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("Chi-square Goodness of Fit Test:")
+            print("Chi-square statistic:", stat)
+            print("p-value:", p_val)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 10. Chi-square Test for Independence
+def build_chi_square_independence_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import chi2_contingency
+    table_text = widgets.Textarea(value="", placeholder="Enter table rows (values separated by commas, one row per line)", description="Table:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([table_text, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                rows = table_text.value.strip().split("\n")
+                table = [[float(x.strip()) for x in row.split(",") if x.strip() != ""] for row in rows if row.strip() != ""]
+            except Exception as e:
+                print("Error processing table:", e)
+                return
+            stat, p_val, dof, expected = chi2_contingency(table)
+            alpha = sig_level_in.value
+            outcome = "Significant association found" if p_val < alpha else "No significant association"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("Chi-square Test for Independence:")
+            print("Chi-square statistic:", stat)
+            print("p-value:", p_val)
+            print("Degrees of Freedom:", dof)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 11. One Way ANOVA
+def build_one_way_anova_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import f_oneway
+    groups_text = widgets.Textarea(value="", placeholder="Enter group data: for each group, enter numbers separated by commas. Use newlines for different groups.", description="Groups:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([groups_text, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                groups = []
+                rows = groups_text.value.strip().split("\n")
+                for row in rows:
+                    if row.strip():
+                        group = [float(x.strip()) for x in row.split(",") if x.strip() != ""]
+                        groups.append(group)
+            except Exception as e:
+                print("Error processing groups:", e)
+                return
+            stat, p_val = f_oneway(*groups)
+            alpha = sig_level_in.value
+            outcome = "Significant difference among groups" if p_val < alpha else "No significant difference among groups"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("One Way ANOVA:")
+            print("F statistic:", stat)
+            print("p-value:", p_val)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 12. Two Way ANOVA (with both Excel upload and manual entry option)
+def build_two_way_anova_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    import pandas as pd
+    import statsmodels.api as sm
+    from statsmodels.formula.api import ols
+    input_mode = widgets.RadioButtons(options=["Upload CSV/Excel", "Manual Entry"], value="Upload CSV/Excel", description="Data Input:")
+    # Widgets for file upload
+    file_upload = widgets.FileUpload(accept='.csv, .xlsx', multiple=False, description="Upload File")
+    dep_var_dd = widgets.Dropdown(options=[], description="Dependent Var:", style={'description_width': '150px'})
+    factor_a_dd = widgets.Dropdown(options=[], description="Factor A:", style={'description_width': '150px'})
+    factor_b_dd = widgets.Dropdown(options=[], description="Factor B:", style={'description_width': '150px'})
+    # Widget for manual entry (a textarea for table data; same format as chi-square table)
+    manual_text = widgets.Textarea(value="", placeholder="Enter table rows: values separated by commas, one row per line", description="Manual Data:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([input_mode, run_button, output_area])
+    def update_inputs(change):
+        if input_mode.value == "Upload CSV/Excel":
+            container.children = [input_mode, file_upload, dep_var_dd, factor_a_dd, factor_b_dd, tail_dd, sig_level_in, run_button, output_area]
+        else:
+            container.children = [input_mode, manual_text, tail_dd, sig_level_in, run_button, output_area]
+    input_mode.observe(update_inputs, names='value')
+    update_inputs(None)
+    def update_dropdowns(change):
+        if file_upload.value:
+            uploaded_file = list(file_upload.value.values())[0]
+            try:
+                try:
+                    df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                except:
+                    df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                options = list(df.columns)
+                dep_var_dd.options = options
+                factor_a_dd.options = options
+                factor_b_dd.options = options
+            except Exception as e:
+                with output_area:
+                    clear_output()
+                    print("Error reading file:", e)
+    file_upload.observe(update_dropdowns, 'value')
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            alpha = sig_level_in.value
+            if input_mode.value == "Upload CSV/Excel":
+                if not file_upload.value:
+                    print("Please upload a file.")
+                    return
+                uploaded_file = list(file_upload.value.values())[0]
+                try:
+                    try:
+                        df = pd.read_csv(pd.io.common.BytesIO(uploaded_file['content']))
+                    except:
+                        df = pd.read_excel(pd.io.common.BytesIO(uploaded_file['content']))
+                except Exception as e:
+                    print("Error reading file:", e)
+                    return
+                dep = dep_var_dd.value
+                facA = factor_a_dd.value
+                facB = factor_b_dd.value
+                formula = f'{dep} ~ C({facA}) + C({facB}) + C({facA}):C({facB})'
+                try:
+                    model = ols(formula, data=df).fit()
+                    aov_table = sm.stats.anova_lm(model, typ=2)
+                except Exception as e:
+                    print("Error performing ANOVA:", e)
+                    return
+            else:
+                try:
+                    rows = manual_text.value.strip().split("\n")
+                    data = []
+                    for row in rows:
+                        if row.strip():
+                            data.append([float(x.strip()) for x in row.split(",") if x.strip() != ""])
+                    # Assume the first column is the dependent variable and the others are factors (for simplicity)
+                    # Alternatively, you may parse the input in a different way.
+                    df = pd.DataFrame(data[1:], columns=data[0])
+                    # For manual entry, we require the user to specify the column names.
+                    # For simplicity, we assume columns: 'Y', 'Factor1', 'Factor2'
+                    if 'Y' not in df.columns or 'Factor1' not in df.columns or 'Factor2' not in df.columns:
+                        print("For manual entry, please include columns: Y, Factor1, Factor2 in the first row.")
+                        return
+                    formula = 'Y ~ C(Factor1) + C(Factor2) + C(Factor1):C(Factor2)'
+                    model = ols(formula, data=df).fit()
+                    aov_table = sm.stats.anova_lm(model, typ=2)
+                except Exception as e:
+                    print("Error processing manual data:", e)
+                    return
+            outcome = "Significant effects found" if any(aov_table['PR(>F)'] < alpha) else "No significant effects found"
+            print("Two Way ANOVA:")
+            print(aov_table)
+            print(outcome)
+    run_button.on_click(run_test_action)
+    return container
+
+# 13. Kruskal-Wallis Test
+def build_kruskal_wallis_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import kruskal
+    groups_text = widgets.Textarea(value="", placeholder="Enter group data: for each group, enter numbers separated by commas; use newlines for different groups.", description="Groups:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([groups_text, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                groups = []
+                rows = groups_text.value.strip().split("\n")
+                for row in rows:
+                    if row.strip():
+                        group = [float(x.strip()) for x in row.split(",") if x.strip() != ""]
+                        groups.append(group)
+            except Exception as e:
+                print("Error processing groups:", e)
+                return
+            stat, p_val = kruskal(*groups)
+            alpha = sig_level_in.value
+            outcome = "Significant difference among groups" if p_val < alpha else "No significant difference among groups"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("Kruskal-Wallis Test:")
+            print("H statistic:", stat)
+            print("p-value:", p_val)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 14. Shapiro-Wilk Test
+def build_shapiro_wilk_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import shapiro
+    data_text = widgets.Textarea(value="", placeholder="Enter data separated by commas", description="Data:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([data_text, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                data = [float(x.strip()) for x in data_text.value.split(",") if x.strip() != ""]
+            except Exception as e:
+                print("Error processing data:", e)
+                return
+            stat, p_val = shapiro(data)
+            alpha = sig_level_in.value
+            outcome = "Data is not normally distributed" if p_val < alpha else "Data is normally distributed"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("Shapiro-Wilk Test:")
+            print("W statistic:", stat)
+            print("p-value:", p_val)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 15. Levene Test
+def build_levene_test_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import levene
+    groups_text = widgets.Textarea(value="", placeholder="Enter group data: for each group, enter numbers separated by commas; use newlines for different groups.", description="Groups:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([groups_text, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                groups = []
+                rows = groups_text.value.strip().split("\n")
+                for row in rows:
+                    if row.strip():
+                        group = [float(x.strip()) for x in row.split(",") if x.strip() != ""]
+                        groups.append(group)
+            except Exception as e:
+                print("Error processing groups:", e)
+                return
+            stat, p_val = levene(*groups)
+            alpha = sig_level_in.value
+            outcome = "Variances are significantly different" if p_val < alpha else "No significant difference in variances"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("Levene Test:")
+            print("W statistic:", stat)
+            print("p-value:", p_val)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 16. KS Test (Kolmogorov-Smirnov)
+def build_ks_test_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import kstest
+    data_text = widgets.Textarea(value="", placeholder="Enter data separated by commas", description="Data:")
+    mean_in = widgets.FloatText(value=0.0, description="Mean:", style={'description_width': '150px'})
+    std_in = widgets.FloatText(value=1.0, description="Std Dev:", style={'description_width': '150px'})
+    tail_dd = widgets.Dropdown(options=["Two Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([data_text, mean_in, std_in, tail_dd, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                data = [float(x.strip()) for x in data_text.value.split(",") if x.strip() != ""]
+            except Exception as e:
+                print("Error processing data:", e)
+                return
+            mu = mean_in.value
+            sigma = std_in.value
+            stat, p_val = kstest(data, 'norm', args=(mu, sigma))
+            alpha = sig_level_in.value
+            outcome = "Data distribution significantly differs from normal" if p_val < alpha else "Data distribution is not significantly different from normal"
+            decision = "reject" if p_val < alpha else "fail to reject"
+            print("Kolmogorov-Smirnov Test:")
+            print("KS statistic:", stat)
+            print("p-value:", p_val)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 17. Pearson Correlation Test
+def build_pearson_correlation_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import pearsonr
+    import numpy as np
+    data1_text = widgets.Textarea(value="", placeholder="Enter data for variable 1 (comma separated)", description="Variable 1:")
+    data2_text = widgets.Textarea(value="", placeholder="Enter data for variable 2 (comma separated)", description="Variable 2:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Positive", "Negative"], value="Positive", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd])
+    def update_tail(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail, names='value')
+    update_tail(None)
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([data1_text, data2_text, tail_dd, direction_box, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                x = np.array([float(x.strip()) for x in data1_text.value.split(",") if x.strip() != ""])
+                y = np.array([float(x.strip()) for x in data2_text.value.split(",") if x.strip() != ""])
+            except Exception as e:
+                print("Error processing data:", e)
+                return
+            r, p_val = pearsonr(x, y)
+            alpha = sig_level_in.value
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "Positive":
+                    p = p_val / 2 if r > 0 else 1 - (p_val / 2)
+                    outcome = "Significant positive correlation" if (r > 0 and p < alpha) else "No significant positive correlation"
+                else:
+                    p = p_val / 2 if r < 0 else 1 - (p_val / 2)
+                    outcome = "Significant negative correlation" if (r < 0 and p < alpha) else "No significant negative correlation"
+            else:
+                p = p_val
+                outcome = "Significant correlation" if p < alpha else "No significant correlation"
+            decision = "reject" if p < alpha else "fail to reject"
+            print("Pearson Correlation Test:")
+            print("Correlation coefficient:", r)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# 18. Spearman Correlation Test
+def build_spearman_correlation_ui():
+    import ipywidgets as widgets
+    from IPython.display import clear_output
+    from scipy.stats import spearmanr
+    import numpy as np
+    data1_text = widgets.Textarea(value="", placeholder="Enter data for variable 1 (comma separated)", description="Variable 1:")
+    data2_text = widgets.Textarea(value="", placeholder="Enter data for variable 2 (comma separated)", description="Variable 2:")
+    tail_dd = widgets.Dropdown(options=["Two Tailed", "One Tailed"], value="Two Tailed", description="Tail Type:", style={'description_width': '150px'})
+    direction_dd = widgets.Dropdown(options=["Positive", "Negative"], value="Positive", description="Direction:", style={'description_width': '150px'})
+    direction_box = widgets.HBox([direction_dd])
+    def update_tail(change):
+        if tail_dd.value == "One Tailed":
+            direction_box.layout.visibility = 'visible'
+        else:
+            direction_box.layout.visibility = 'hidden'
+    tail_dd.observe(update_tail, names='value')
+    update_tail(None)
+    sig_level_in = widgets.FloatText(value=0.05, description="Significance Level:", style={'description_width': '150px'})
+    output_area = widgets.Output()
+    run_button = widgets.Button(description="Run Test", button_style='success')
+    container = widgets.VBox([data1_text, data2_text, tail_dd, direction_box, sig_level_in, run_button, output_area])
+    def run_test_action(b):
+        with output_area:
+            clear_output()
+            try:
+                x = np.array([float(x.strip()) for x in data1_text.value.split(",") if x.strip() != ""])
+                y = np.array([float(x.strip()) for x in data2_text.value.split(",") if x.strip() != ""])
+            except Exception as e:
+                print("Error processing data:", e)
+                return
+            corr, p_val = spearmanr(x, y)
+            alpha = sig_level_in.value
+            if tail_dd.value == "One Tailed":
+                if direction_dd.value == "Positive":
+                    p = p_val / 2 if corr > 0 else 1 - (p_val / 2)
+                    outcome = "Significant positive correlation" if (corr > 0 and p < alpha) else "No significant positive correlation"
+                else:
+                    p = p_val / 2 if corr < 0 else 1 - (p_val / 2)
+                    outcome = "Significant negative correlation" if (corr < 0 and p < alpha) else "No significant negative correlation"
+            else:
+                p = p_val
+                outcome = "Significant correlation" if p < alpha else "No significant correlation"
+            decision = "reject" if p < alpha else "fail to reject"
+            print("Spearman Correlation Test:")
+            print("Correlation coefficient:", corr)
+            print("p-value:", p)
+            print(outcome)
+            print(f"At significance level {alpha}, we {decision} the null hypothesis.")
+    run_button.on_click(run_test_action)
+    return container
+
+# -------------------------------------------------
+# Main Container: Parent Dropdown to Select Test
+# -------------------------------------------------
+main_dropdown = widgets.Dropdown(
+    options=[
+        "One Sample z-test",
+        "Two Sample z-test",
+        "One Sample z-proportions test",
+        "Two Sample z-proportions test",
+        "Fisher's Exact Test",
+        "One Sample T-test",
+        "Two Sample T-test",
+        "Paired T-test",
+        "Chi-square Goodness of Fit Test",
+        "Chi-square Test for Independence",
+        "One Way ANOVA",
+        "Two Way ANOVA",
+        "Kruskal-Wallis Test",
+        "Shapiro-Wilk Test",
+        "Levene Test",
+        "KS Test",
+        "Pearson Correlation",
+        "Spearman Correlation"
+    ],
+    description="Select Test:"
+)
+test_container = widgets.Output()
+def update_test_container(change):
+    test_container.clear_output()
+    with test_container:
+        if main_dropdown.value == "One Sample z-test":
+            display(build_one_sample_z_means_ui())
+        elif main_dropdown.value == "Two Sample z-test":
+            display(build_two_sample_z_means_ui())
+        elif main_dropdown.value == "One Sample z-proportions test":
+            display(build_one_sample_z_proportions_ui())
+        elif main_dropdown.value == "Two Sample z-proportions test":
+            display(build_two_sample_z_proportions_ui())
+        elif main_dropdown.value == "Fisher's Exact Test":
+            display(build_fishers_exact_test_ui())
+        elif main_dropdown.value == "One Sample T-test":
+            display(build_one_sample_t_test_ui())
+        elif main_dropdown.value == "Two Sample T-test":
+            display(build_two_sample_t_test_ui())
+        elif main_dropdown.value == "Paired T-test":
+            display(build_paired_t_test_ui())
+        elif main_dropdown.value == "Chi-square Goodness of Fit Test":
+            display(build_chi_square_goodness_of_fit_ui())
+        elif main_dropdown.value == "Chi-square Test for Independence":
+            display(build_chi_square_independence_ui())
+        elif main_dropdown.value == "One Way ANOVA":
+            display(build_one_way_anova_ui())
+        elif main_dropdown.value == "Two Way ANOVA":
+            display(build_two_way_anova_ui())
+        elif main_dropdown.value == "Kruskal-Wallis Test":
+            display(build_kruskal_wallis_ui())
+        elif main_dropdown.value == "Shapiro-Wilk Test":
+            display(build_shapiro_wilk_ui())
+        elif main_dropdown.value == "Levene Test":
+            display(build_levene_test_ui())
+        elif main_dropdown.value == "KS Test":
+            display(build_ks_test_ui())
+        elif main_dropdown.value == "Pearson Correlation":
+            display(build_pearson_correlation_ui())
+        elif main_dropdown.value == "Spearman Correlation":
+            display(build_spearman_correlation_ui())
+main_dropdown.observe(update_test_container, names='value')
+update_test_container(None)
+display(widgets.VBox([main_dropdown, test_container]))
+

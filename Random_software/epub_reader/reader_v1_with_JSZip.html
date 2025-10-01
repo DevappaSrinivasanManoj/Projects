@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure EPUB Reader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        #controls {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+            z-index: 100;
+        }
+        #reader {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            min-height: 400px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        #status {
+            margin: 10px 0;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <input type="file" id="epub-file" accept=".epub">
+        <button onclick="previousChapter()" id="prev-btn" disabled>Previous</button>
+        <button onclick="nextChapter()" id="next-btn" disabled>Next</button>
+        <button onclick="downloadSanitizedEpub()" id="download-btn" disabled>Download Sanitized EPUB</button>
+        <span id="chapter-info"></span>
+    </div>
+    <div id="reader">
+        <div id="status"></div>
+        <div id="book-content">Upload an EPUB file to start reading...</div>
+    </div>
+
+    <!-- JSZip via CDN (replace with local version later) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        let bookFiles = {};
+        let spineItems = [];
+        let currentChapterIndex = 0;
+        let sanitizedBookFiles = null;
+        let originalHasScriptsOrLinks = false;
+
+        document.getElementById('epub-file').addEventListener('change', handleFileUpload);
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const arrayBuffer = e.target.result;
+                const zip = new JSZip();
+                const unzipped = await zip.loadAsync(arrayBuffer);
+
+                bookFiles = {};
+                spineItems = [];
+                currentChapterIndex = loadLastPosition(file.name) || 0;
+                originalHasScriptsOrLinks = false;
+
+                // Store original files and check for scripts/links
+                for (const [path, zipEntry] of Object.entries(unzipped.files)) {
+                    if (!zipEntry.dir) {
+                        bookFiles[path] = await zipEntry.async('blob');
+                        if (path.endsWith('.html') || path.endsWith('.xhtml')) {
+                            const text = await blobToText(bookFiles[path]);
+                            if (text.includes('<script') || text.includes('href=')) {
+                                originalHasScriptsOrLinks = true;
+                            }
+                        }
+                    }
+                }
+
+                // Parse EPUB structure
+                await parseEpub();
+
+                // Sanitize and create new EPUB
+                await createSanitizedEpub();
+
+                // Display the sanitized book
+                displayCurrentChapter();
+
+                // Update status
+                document.getElementById('status').textContent = originalHasScriptsOrLinks
+                    ? 'Original book had scripts or links—sanitized version created.'
+                    : 'Original book was clean—no sanitization needed.';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function parseEpub() {
+            const containerFile = bookFiles['META-INF/container.xml'];
+            if (!containerFile) throw new Error('Invalid EPUB: container.xml not found');
+            const containerText = await blobToText(containerFile);
+            const parser = new DOMParser();
+            const containerDoc = parser.parseFromString(containerText, 'text/xml');
+            const opfPath = containerDoc.querySelector('rootfile')?.getAttribute('full-path');
+
+            const opfFile = bookFiles[opfPath];
+            if (!opfFile) throw new Error('Invalid EPUB: OPF file not found');
+            const opfText = await blobToText(opfFile);
+            const opfDoc = parser.parseFromString(opfText, 'text/xml');
+            const opfBasePath = opfPath.substring(0, opfPath.lastIndexOf('/')) || '';
+
+            const spine = opfDoc.querySelector('spine');
+            const itemRefs = spine.querySelectorAll('itemref');
+            const manifestItems = {};
+            opfDoc.querySelectorAll('manifest item').forEach(item => {
+                const id = item.getAttribute('id');
+                const href = item.getAttribute('href');
+                manifestItems[id] = opfBasePath ? `${opfBasePath}/${href}` : href;
+            });
+
+            spineItems = Array.from(itemRefs).map(itemRef => manifestItems[itemRef.getAttribute('idref')]).filter(Boolean);
+        }
+
+        async function createSanitizedEpub() {
+            const newZip = new JSZip();
+            const sanitizedContent = {};
+
+            // Extract plain text from each spine item
+            for (const path of spineItems) {
+                const file = bookFiles[path];
+                if (file) {
+                    const text = await blobToText(file);
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(text, 'text/html');
+                    const plainText = doc.body.textContent || ''; // Only plain text
+                    sanitizedContent[path] = plainText;
+                }
+            }
+
+            // Create minimal EPUB structure
+            newZip.file('mimetype', 'application/epub+zip');
+            newZip.file('META-INF/container.xml', `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+    <rootfiles>
+        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+    </rootfiles>
+</container>`);
+
+            // Generate sanitized OPF and content
+            let manifest = '';
+            let spine = '';
+            let i = 0;
+            for (const path of spineItems) {
+                const newPath = `OEBPS/chapter${i}.xhtml`;
+                const plainText = sanitizedContent[path];
+                newZip.file(newPath, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Chapter ${i + 1}</title></head>
+<body><p>${plainText.replace(/\n/g, '<br>')}</p></body>
+</html>`);
+                manifest += `<item id="chapter${i}" href="chapter${i}.xhtml" media-type="application/xhtml+xml"/>\n`;
+                spine += `<itemref idref="chapter${i}"/>\n`;
+                i++;
+            }
+
+            newZip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="bookid">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <dc:title>Sanitized Book</dc:title>
+        <dc:identifier id="bookid">urn:uuid:${crypto.randomUUID()}</dc:identifier>
+    </metadata>
+    <manifest>${manifest}</manifest>
+    <spine>${spine}</spine>
+</package>`);
+
+            sanitizedBookFiles = await newZip.generateAsync({ type: 'blob' });
+            document.getElementById('download-btn').disabled = false;
+
+            // Update spineItems to reflect sanitized content
+            spineItems = Object.keys(sanitizedContent).map((_, idx) => `OEBPS/chapter${idx}.xhtml`);
+            bookFiles = {};
+            const sanitizedZip = new JSZip();
+            await sanitizedZip.loadAsync(sanitizedBookFiles);
+            for (const [path, zipEntry] of Object.entries(sanitizedZip.files)) {
+                if (!zipEntry.dir) bookFiles[path] = await zipEntry.async('blob');
+            }
+        }
+
+        async function displayCurrentChapter() {
+            if (spineItems.length === 0 || currentChapterIndex < 0 || currentChapterIndex >= spineItems.length) {
+                document.getElementById('book-content').innerHTML = 'No chapters available.';
+                return;
+            }
+
+            const chapterPath = spineItems[currentChapterIndex];
+            const chapterFile = bookFiles[chapterPath];
+            const chapterText = await blobToText(chapterFile);
+            const parser = new DOMParser();
+            const chapterDoc = parser.parseFromString(chapterText, 'text/html');
+
+            const contentDiv = document.getElementById('book-content');
+            contentDiv.innerHTML = chapterDoc.querySelector('body')?.innerHTML || 'No content found.';
+
+            saveLastPosition(document.getElementById('epub-file').files[0]?.name);
+            updateNavigation();
+        }
+
+        function updateNavigation() {
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const chapterInfo = document.getElementById('chapter-info');
+
+            prevBtn.disabled = currentChapterIndex <= 0;
+            nextBtn.disabled = currentChapterIndex >= spineItems.length - 1;
+            chapterInfo.textContent = `Chapter ${currentChapterIndex + 1} of ${spineItems.length}`;
+        }
+
+        function previousChapter() {
+            if (currentChapterIndex > 0) {
+                currentChapterIndex--;
+                displayCurrentChapter();
+            }
+        }
+
+        function nextChapter() {
+            if (currentChapterIndex < spineItems.length - 1) {
+                currentChapterIndex++;
+                displayCurrentChapter();
+            }
+        }
+
+        function downloadSanitizedEpub() {
+            if (!sanitizedBookFiles) return;
+            const url = URL.createObjectURL(sanitizedBookFiles);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sanitized_book.epub';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function saveLastPosition(fileName) {
+            if (fileName) {
+                localStorage.setItem(`lastPosition_${fileName}`, currentChapterIndex);
+            }
+        }
+
+        function loadLastPosition(fileName) {
+            return parseInt(localStorage.getItem(`lastPosition_${fileName}`)) || 0;
+        }
+
+        async function blobToText(blob) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsText(blob);
+            });
+        }
+    </script>
+</body>
+</html>

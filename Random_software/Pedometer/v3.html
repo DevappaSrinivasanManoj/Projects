@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Step Counter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 50px;
+    }
+    #stepCounter {
+      font-size: 2em;
+      margin: 20px;
+    }
+    button {
+      font-size: 1.2em;
+      padding: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Step Counter</h1>
+  <p id="stepCounter">Steps: 0</p>
+  <button onclick="startTracking()">Start Tracking</button>
+
+  <script>
+    let stepCount = 0;
+    let lastAcceleration = { x: 0, y: 0, z: 0 };
+    // Adjustable sensitivity threshold; try lowering this value if steps aren't detected
+    const sensitivityThreshold = 0.0001;
+
+    function startTracking() {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission()
+          .then(response => {
+            if (response === 'granted') {
+              window.addEventListener("devicemotion", detectStep);
+              console.log("Motion event listener added (iOS permission granted).");
+            } else {
+              alert("Permission denied for motion tracking.");
+            }
+          })
+          .catch(error => {
+            console.error("Error requesting motion permission:", error);
+          });
+      } else if (window.DeviceMotionEvent) {
+        window.addEventListener("devicemotion", detectStep);
+        console.log("Motion event listener added.");
+      } else {
+        alert("Device Motion API not supported.");
+      }
+    }
+
+    function detectStep(event) {
+      let acc = event.accelerationIncludingGravity;
+      if (!acc) return;
+
+      // Debug: log the current acceleration values
+      console.log("Acceleration:", acc);
+
+      let change = Math.abs(acc.x - lastAcceleration.x) +
+                   Math.abs(acc.y - lastAcceleration.y) +
+                   Math.abs(acc.z - lastAcceleration.z);
+
+      // Debug: log the calculated change
+      console.log("Change in acceleration:", change);
+
+      if (change > sensitivityThreshold) {
+        stepCount++;
+        document.getElementById("stepCounter").innerText = "Steps: " + stepCount;
+        console.log("Step detected! Total steps:", stepCount);
+      }
+
+      lastAcceleration = { x: acc.x, y: acc.y, z: acc.z };
+    }
+  </script>
+</body>
+</html>

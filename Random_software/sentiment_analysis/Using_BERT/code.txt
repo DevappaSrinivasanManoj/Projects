@@ -1,0 +1,21 @@
+!pip install transformers torch --quiet
+from transformers import pipeline
+classifier = pipeline("sentiment-analysis", model="sentiment_model/", tokenizer="sentiment_model/") 
+or use classifier = pipeline("sentiment-analysis") #This downloads the model from the cloud instead of using local model. 
+Better when you cannot upload large file to git
+
+import pandas as pd
+
+new_reviews = pd.Series([
+    'i like the product. but it is very expensive. everything else was satisfactory',
+    'what a disappointment. my time and money would have been better spent elsewhere',
+    'Purchase this without fail',
+    'Never buy this'
+])
+
+
+results = classifier(new_reviews.tolist())
+
+for review, result in zip(new_reviews, results):
+    print(f"\nReview: {review}\nPrediction: {result['label']}, Confidence: {result['score']:.2f}")
+	

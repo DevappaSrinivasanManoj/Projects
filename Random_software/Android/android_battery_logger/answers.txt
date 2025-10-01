@@ -1,0 +1,24 @@
+   1. Storage Permission: The app needs WRITE_EXTERNAL_STORAGE permission to save logs in a main-level folder. Modern Android versions restrict direct external storage access. Are you okay
+      with the app requesting this permission, which the user must grant manually? Or would you prefer using the app-specific directory (no special permissions needed, but harder for users
+      to access)? : yes, ask the user for permission which the user can grant
+
+
+   2. Background Execution: To log the battery at a set time, I'll use WorkManager, the standard for background tasks on modern Android. Is this acceptable? yes
+
+
+   3. UI Design: For the "minimal, lightweight" UI, I'll create a single screen with a pause/resume toggle and a time picker. Does this match your vision? : yes
+
+
+   4. Charger Events: I'll use a BroadcastReceiver registered in AndroidManifest.xml to track charger events. Is this approach okay?: I am not aware of this. Use the best approach
+
+
+   5. Project Delivery: The instructions mention a "ready-to-run ZIP structure." I can create the complete directory structure and all necessary files, but I cannot create a ZIP file myself.
+      You would need to zip the final directory. Is this what you intended? : I just need a project using which I can build an apk file to test on android devices
+
+
+   6. SDK/Build Tools: The specified compileSdkVersion (36) and buildToolsVersion (36.1.0) are future versions. To ensure stability, I'll use the latest stable versions (compileSdkVersion =
+      34 and a recent build tools version). Is this acceptable?  : yes, you may also check the versions installed and make the decision
+
+
+   7. Java/Gradle Versions: The requested Java (25) and Gradle (9.6) versions are not yet released. I will configure the project to use the current standards, Java 17 and Gradle 8.7. Is this
+      okay? : yes, you may also check the versions installed and make the decision

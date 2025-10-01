@@ -1,0 +1,21 @@
+The below only if not already present. This is required for creating virtual envs
+sudo apt install python3.10-venv
+
+Create the Virtual Environment:
+python -m venv ScientificCalc
+python3 -m venv ScientificCalc
+
+Activate the Virtual Environment: (This can also be used when you need to activate the env the subsequent times)
+source ScientificCalc/bin/activate
+
+Install Libraries with Specific Versions:
+pip install scipy
+
+Verify Installed Libraries:
+pip list
+
+Below command to export the requirements(i.e. all the libraries installed to run this API in the created virtual env) to a file named requirements.txt. This file can later be used in the cloud server to create a similar virtual environment.
+pip freeze >  requirements.txt
+
+Closing the terminal deactivates the virtual env automatically. But still you can use deactivate command to deactivate it.
+deactivate

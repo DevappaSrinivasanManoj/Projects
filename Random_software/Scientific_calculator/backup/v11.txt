@@ -1,0 +1,1 @@
+Now I realized that python is the worst if we need an UI and so, I will continue with html,js and css itself.

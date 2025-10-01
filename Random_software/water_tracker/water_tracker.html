@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Water Drinking Tracker</title>
+  <style>
+    /* Original unchanged CSS */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #ADD8E6;
+    }
+    #settings, #backup, #reduce {
+      margin-bottom: 20px;
+    }
+    #settings label {
+      margin-right: 20px;
+    }
+    #circles, #reduceCircles {
+      margin: 20px 0;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .circle {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background-color: #4CAF50;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: bold;
+      user-select: none;
+      transition: background-color 0.3s;
+      flex-shrink: 0;
+    }
+    .circle:hover {
+      background-color: #45a049;
+    }
+    .reduce-circle {
+      background-color: #f44336;
+    }
+    .reduce-circle:hover {
+      background-color: #d32f2f;
+    }
+    #progressBarContainer {
+      width: 100%;
+      background-color: #ddd;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 10px;
+      position: relative;
+      height: 30px;
+    }
+    #progressBar {
+      background-color: #4CAF50;
+      height: 100%;
+      width: 0%;
+      transition: width 0.5s;
+    }
+    #progressText {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      line-height: 30px;
+      font-weight: bold;
+      color: #000;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+    }
+    #historyContainer {
+      display: none;
+      margin-top: 10px;
+    }
+    #toggleHistory {
+      cursor: pointer;
+      background-color: #2196F3;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    @media (max-width: 600px) {
+      .circle {
+        width: 120px;
+        height: 120px;
+        font-size: 1.2em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Original unchanged HTML -->
+  <h1>Water Drinking Tracker</h1>
+  
+  <div id="settings">
+    <label>
+      Bottle Capacity (ml): 
+      <input id="bottleCapacityInput" type="number" min="1" step="1">
+    </label>
+    <label>
+      Daily Target (ml): 
+      <input id="targetInput" type="number" min="1" step="1">
+    </label>
+    <button id="saveSettingsBtn">Save Settings</button>
+  </div>
+  
+  <div id="circles">
+    <div class="circle" data-multiplier="0.25">+ 1/4 Bottle</div>
+    <div class="circle" data-multiplier="0.5">+ 1/2 Bottle</div>
+    <div class="circle" data-multiplier="1">+ 1 Bottle</div>
+  </div>
+  
+  <div id="bottleCount" style="text-align: center; font-size: 1.2em; margin-bottom: 10px; font-weight: bold;">
+    Bottles today: 0
+  </div>
+  
+  <div id="progressBarContainer">
+    <div id="progressBar"></div>
+    <div id="progressText">0 ml / 0 ml</div>
+  </div>
+  
+  <div id="reduce">
+    <h2>Reduce Water Consumption</h2>
+    <div id="reduceCircles">
+      <div class="circle reduce-circle" data-multiplier="0.25">- 1/4 Bottle</div>
+      <div class="circle reduce-circle" data-multiplier="0.5">- 1/2 Bottle</div>
+      <div class="circle reduce-circle" data-multiplier="1">- 1 Bottle</div>
+    </div>
+    <button id="clearBtn" style="margin-top: 10px;">Clear Today's Water</button>
+  </div>
+  
+  <div id="history">
+    <button id="toggleHistory">Show History</button>
+    <div id="historyContainer">
+      <h2>Daily Consumption History</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Consumed (ml)</th>
+            <th>Progress</th>
+          </tr>
+        </thead>
+        <tbody id="historyTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <div id="backup">
+    <button id="exportBtn">Export Backup</button>
+    <button id="importBtn">Import Backup</button>
+    <input type="file" id="importFileInput" accept=".csv" style="display:none;">
+  </div>
+
+  <script>
+    // Original code with ONLY date handling changed
+    let db;
+    const dbName = "waterTracker";
+    const dbVersion = 1;
+    const storeSettings = "settings";
+    const storeRecords = "records";
+
+    // ========== ONLY CHANGED PARTS START HERE ==========
+    function getLocalDateString() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function getLocalDateStringFromDate(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    // ========== ONLY CHANGED PARTS END HERE ==========
+
+    function initDB() {
+      let request = indexedDB.open(dbName, dbVersion);
+      request.onupgradeneeded = function(e) {
+        let db = e.target.result;
+        if (!db.objectStoreNames.contains(storeSettings)) {
+          db.createObjectStore(storeSettings, { keyPath: "key" });
+        }
+        if (!db.objectStoreNames.contains(storeRecords)) {
+          db.createObjectStore(storeRecords, { keyPath: "date" });
+        }
+      };
+      request.onsuccess = function(e) {
+        db = e.target.result;
+        loadSettings();
+        loadTodayRecord();
+        loadHistory();
+      };
+      request.onerror = function(e) {
+        console.error("Error opening DB", e);
+      };
+    }
+
+    function getSetting(key, callback) {
+      let tx = db.transaction(storeSettings, "readonly");
+      let store = tx.objectStore(storeSettings);
+      let req = store.get(key);
+      req.onsuccess = function() {
+        callback(req.result ? req.result.value : null);
+      };
+    }
+
+    function saveSetting(key, value) {
+      let tx = db.transaction(storeSettings, "readwrite");
+      let store = tx.objectStore(storeSettings);
+      store.put({ key: key, value: value });
+    }
+
+    function loadSettings() {
+      getSetting("bottleCapacity", function(val) {
+        if (val !== null) {
+          document.getElementById("bottleCapacityInput").value = val;
+        } else {
+          document.getElementById("bottleCapacityInput").value = 750;
+          saveSetting("bottleCapacity", 750);
+        }
+      });
+      getSetting("targetConsumption", function(val) {
+        if (val !== null) {
+          document.getElementById("targetInput").value = val;
+        } else {
+          document.getElementById("targetInput").value = 2000;
+          saveSetting("targetConsumption", 2000);
+        }
+      });
+    }
+
+    function loadTodayRecord() {
+      let today = getLocalDateString(); // Changed from toISOString()
+      let tx = db.transaction(storeRecords, "readwrite");
+      let store = tx.objectStore(storeRecords);
+      let req = store.get(today);
+      req.onsuccess = function() {
+        let record = req.result;
+        if (!record) {
+          record = { date: today, consumed: 0 };
+          store.put(record);
+        }
+        updateProgress(record.consumed);
+      };
+    }
+
+    function updateTodayRecord(changeAmount) {
+      let today = getLocalDateString(); // Changed from toISOString()
+      let tx = db.transaction(storeRecords, "readwrite");
+      let store = tx.objectStore(storeRecords);
+      let req = store.get(today);
+      req.onsuccess = function() {
+        let record = req.result;
+        if (!record) {
+          record = { date: today, consumed: 0 };
+        }
+        record.consumed += changeAmount;
+        if(record.consumed < 0) record.consumed = 0;
+        store.put(record).onsuccess = function() {
+          updateProgress(record.consumed);
+          loadHistory();
+        };
+      };
+    }
+
+    function clearTodayRecord() {
+      let today = getLocalDateString(); // Changed from toISOString()
+      let tx = db.transaction(storeRecords, "readwrite");
+      let store = tx.objectStore(storeRecords);
+      let req = store.get(today);
+      req.onsuccess = function() {
+        let record = req.result;
+        if(record) {
+          record.consumed = 0;
+          store.put(record).onsuccess = function() {
+            updateProgress(record.consumed);
+            loadHistory();
+          };
+        }
+      };
+    }
+
+	function updateProgress(consumed) {
+      let target = parseInt(document.getElementById("targetInput").value) || 0;
+      let bottleCapacity = parseInt(document.getElementById("bottleCapacityInput").value) || 750;
+      let progress = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
+      
+      // Update progress bar
+      document.getElementById("progressBar").style.width = progress + "%";
+      document.getElementById("progressText").innerText = consumed + " ml / " + target + " ml";
+      
+      // Update bottle count
+      const bottleCount = (consumed / bottleCapacity).toFixed(2);
+      document.getElementById("bottleCount").innerText = `Bottles today: ${bottleCount}`;
+	  
+	  // Update progress bar color
+	  if (consumed >= target) {
+		document.getElementById("progressBar").style.backgroundColor = "green";
+	  } else {
+		document.getElementById("progressBar").style.backgroundColor = "orange";
+	  }
+    }
+
+    function loadHistory() {
+      let tbody = document.getElementById("historyTableBody");
+      tbody.innerHTML = "";
+      let tx = db.transaction(storeRecords, "readonly");
+      let store = tx.objectStore(storeRecords);
+      let req = store.getAll();
+      req.onsuccess = function() {
+        let records = req.result;
+        records.sort((a, b) => (a.date < b.date) ? 1 : -1);
+        let currentTarget = parseInt(document.getElementById("targetInput").value) || 2000;
+        records.forEach(record => {
+          let tr = document.createElement("tr");
+          
+          let tdDate = document.createElement("td");
+          tdDate.textContent = record.date;
+          tr.appendChild(tdDate);
+          
+          let tdConsumed = document.createElement("td");
+          tdConsumed.textContent = record.consumed + " ml";
+          tr.appendChild(tdConsumed);
+          
+          let tdMini = document.createElement("td");
+          let miniContainer = document.createElement("div");
+          miniContainer.style.width = "100px";
+          miniContainer.style.height = "10px";
+          miniContainer.style.backgroundColor = "#ddd";
+          miniContainer.style.borderRadius = "5px";
+          miniContainer.style.overflow = "hidden";
+          let miniBar = document.createElement("div");
+          let percentage = currentTarget > 0 ? Math.min((record.consumed / currentTarget) * 100, 100) : 0;
+          miniBar.style.width = percentage + "%";
+          miniBar.style.height = "100%";
+          miniBar.style.backgroundColor = record.consumed >= currentTarget ? "green" : "orange";
+          miniContainer.appendChild(miniBar);
+          tdMini.appendChild(miniContainer);
+          tr.appendChild(tdMini);
+          
+          tbody.appendChild(tr);
+        });
+      };
+    }
+
+    function cleanupOldRecords() {
+      let sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      let cutoff = getLocalDateStringFromDate(sixMonthsAgo); // Changed from toISOString()
+      let tx = db.transaction(storeRecords, "readwrite");
+      let store = tx.objectStore(storeRecords);
+      let req = store.openCursor();
+      req.onsuccess = function(e) {
+        let cursor = e.target.result;
+        if (cursor) {
+          if (cursor.value.date < cutoff) {
+            store.delete(cursor.value.date);
+          }
+          cursor.continue();
+        }
+      };
+    }
+
+    // Original unchanged event listeners
+    document.getElementById("saveSettingsBtn").addEventListener("click", function() {
+      let bottleCapacity = parseInt(document.getElementById("bottleCapacityInput").value) || 750;
+      let target = parseInt(document.getElementById("targetInput").value) || 2000;
+      saveSetting("bottleCapacity", bottleCapacity);
+      saveSetting("targetConsumption", target);
+      loadTodayRecord();
+      loadHistory();
+      updateProgress(0);
+    });
+
+    document.querySelectorAll("#circles .circle").forEach(function(circle) {
+      circle.addEventListener("click", function() {
+        let multiplier = parseFloat(circle.getAttribute("data-multiplier"));
+        let bottleCapacity = parseInt(document.getElementById("bottleCapacityInput").value) || 750;
+        let amount = bottleCapacity * multiplier;
+        updateTodayRecord(amount);
+      });
+    });
+
+    document.querySelectorAll("#reduceCircles .circle").forEach(function(circle) {
+      circle.addEventListener("click", function() {
+        let multiplier = parseFloat(circle.getAttribute("data-multiplier"));
+        let bottleCapacity = parseInt(document.getElementById("bottleCapacityInput").value) || 750;
+        let amount = bottleCapacity * multiplier;
+        updateTodayRecord(-amount);
+      });
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", function() {
+      if(confirm("Are you sure you want to clear today's water consumption?")) {
+        clearTodayRecord();
+      }
+    });
+
+    document.getElementById("toggleHistory").addEventListener("click", function() {
+      let container = document.getElementById("historyContainer");
+      if (container.style.display === "none" || container.style.display === "") {
+        container.style.display = "block";
+        document.getElementById("toggleHistory").innerText = "Hide History";
+      } else {
+        container.style.display = "none";
+        document.getElementById("toggleHistory").innerText = "Show History";
+      }
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", function() {
+      let tx = db.transaction(storeRecords, "readonly");
+      let store = tx.objectStore(storeRecords);
+      let req = store.getAll();
+      req.onsuccess = function() {
+        let records = req.result;
+        let csvContent = "date,consumed\n";
+        records.forEach(function(record) {
+          csvContent += record.date + "," + record.consumed + "\n";
+        });
+        let blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = "water_tracker_backup.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      };
+    });
+
+    document.getElementById("importBtn").addEventListener("click", function() {
+      document.getElementById("importFileInput").click();
+    });
+
+    document.getElementById("importFileInput").addEventListener("change", function() {
+      let file = this.files[0];
+      if (!file) return;
+      let reader = new FileReader();
+      reader.onload = function(e) {
+        let text = e.target.result;
+        let lines = text.split("\n");
+        let tx = db.transaction(storeRecords, "readwrite");
+        let store = tx.objectStore(storeRecords);
+        for (let i = 1; i < lines.length; i++) {
+          if (lines[i].trim() === "") continue;
+          let parts = lines[i].split(",");
+          let date = parts[0];
+          let consumed = parseFloat(parts[1]);
+          store.put({ date: date, consumed: consumed });
+        }
+        tx.oncomplete = function() {
+          loadHistory();
+          loadTodayRecord();
+        };
+      };
+      reader.readAsText(file);
+    });
+
+    window.onload = function() {
+      initDB();
+      setTimeout(cleanupOldRecords, 2000);
+    };
+  </script>
+</body>
+</html>

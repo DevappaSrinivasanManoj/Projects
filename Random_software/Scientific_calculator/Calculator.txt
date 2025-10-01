@@ -1,0 +1,307 @@
+# @title Default title text
+import math
+import fractions
+import re
+import ipywidgets as widgets
+from IPython.display import display, HTML
+
+# --- Adjustable Variables ---
+BOLD_WEIGHT = "1000"  # Adjust this value (e.g., "normal", "bold", "700", etc.)
+BUTTON_TEXT_STYLE = {'font_weight': BOLD_WEIGHT}
+BUTTON_WIDTH = '150px'
+BUTTON_HEIGHT = '40px'
+small_button_layout = widgets.Layout(width=BUTTON_WIDTH, height=BUTTON_HEIGHT)
+
+# --- Global State ---
+calc_state = {
+    "expression": "",
+    "result": ""
+}
+
+# --- Display Widgets ---
+display(HTML("""
+<style>
+    .big-input input {
+        font-size: 24px !important;
+        height: 60px !important;
+        line-height: 70px !important;
+        padding: 5px 10px !important;
+        text-align: right !important;
+    }
+</style>
+"""))
+
+expression_input = widgets.Text(
+    value="",
+    placeholder="Enter expression",
+    layout=widgets.Layout(width='99.1%', height='60px')
+)
+expression_input.add_class("big-input")
+display_style = ("text-align:right; font-size:32px; color:white; background:#1a1a1a; "
+                 "padding:10px; border-radius:8px; min-height:45px;")
+result_display = widgets.HTML(value=f"<div style='{display_style}'>{calc_state['result']}</div>")
+
+def update_display():
+    expression_input.value = calc_state["expression"]
+    result_display.value = f"<div style='{display_style}'>{calc_state['result'] if calc_state['result'] else '&nbsp;'}</div>"
+
+def on_expr_change(change):
+    if change['name'] == 'value':
+        calc_state["expression"] = change['new']
+expression_input.observe(on_expr_change, names='value')
+
+# --- Calculator Editing Functions ---
+def append_to_expr(val):
+    expr = expression_input.value
+    calc_state["expression"] = expr + val
+    update_display()
+
+def clear_calc(b=None):
+    calc_state["expression"] = ""
+    calc_state["result"] = ""
+    update_display()
+
+def backspace(b=None):
+    calc_state["expression"] = calc_state["expression"][:-1]
+    update_display()
+
+# --- Mathematical Helper Functions ---
+def fact(x):
+    return math.factorial(int(x))
+
+def inv(x):
+    return 1 / x
+
+def cbrt(x):
+    if x >= 0:
+        return x ** (1/3)
+    else:
+        return -((-x) ** (1/3))
+
+def nth(n, x):
+    return x ** (1/n)
+
+def dec2frac(x):
+    frac = fractions.Fraction(x).limit_denominator()
+    p, q = frac.numerator, frac.denominator
+    if abs(p) >= q:
+        sign = -1 if p < 0 else 1
+        p_abs = abs(p)
+        whole = p_abs // q
+        remainder = p_abs % q
+        if remainder == 0:
+            return f"{sign * whole}"
+        else:
+            if whole != 0:
+                return f"{sign * whole} {remainder}/{q} ({p}/{q})"
+            else:
+                return f"{p}/{q}"
+    else:
+        return f"{p}/{q}"
+
+# --- Custom Trigonometric Functions (angles in degrees) ---
+def sin_deg(x):
+    return math.sin(math.radians(x))
+
+def cos_deg(x):
+    rad = math.radians(x)
+    val = math.cos(rad)
+    if abs(val) < 1e-10:
+        return 0.0
+    return val
+
+def tan_deg(x):
+    rad = math.radians(x)
+    cos_val = math.cos(rad)
+    if abs(cos_val) < 1e-10:
+        return float('inf')
+    t = math.tan(rad)
+    if abs(t - round(t)) < 1e-9:
+        t = round(t)
+    return t
+
+def asin_deg(x):
+    return math.degrees(math.asin(x))
+
+def acos_deg(x):
+    return math.degrees(math.acos(x))
+
+def atan_deg(x):
+    return math.degrees(math.atan(x))
+
+# --- Preprocess Expression for nCr, nPr, and nth ---
+def preprocess_expr(expr):
+    expr = re.sub(r'(\d+(?:\.\d+)?)\s*nth\s*(\d+(?:\.\d+)?)', r'nth(\1,\2)', expr)
+    expr = re.sub(r'(\d+(?:\.\d+)?)\s*C\s*(\d+(?:\.\d+)?)', r'comb(\1,\2)', expr)
+    expr = re.sub(r'(\d+(?:\.\d+)?)\s*P\s*(\d+(?:\.\d+)?)', r'perm(\1,\2)', expr)
+    return expr
+
+# --- Allowed Functions for Safe Eval ---
+allowed_names = {
+    "sin": sin_deg,
+    "cos": cos_deg,
+    "tan": tan_deg,
+    "asin": asin_deg,
+    "acos": acos_deg,
+    "atan": atan_deg,
+    "ln": math.log,
+    "log": math.log10,
+    "sqrt": math.sqrt,
+    "cbrt": cbrt,
+    "fact": fact,
+    "inv": inv,
+    "nth": nth,
+    "pi": math.pi,
+    "e": math.e,
+    "comb": lambda n, r: math.comb(int(n), int(r)),
+    "perm": lambda n, r: math.perm(int(n), int(r)) if hasattr(math, "perm")
+                           else math.factorial(int(n)) // math.factorial(int(n)-int(r))
+}
+
+# --- Calculation ---
+def calculate(b=None):
+    try:
+        expr = preprocess_expr(calc_state["expression"])
+        result = eval(expr, {"__builtins__": None}, allowed_names)
+        # If result is a float and nearly equal to an integer, round it.
+        if isinstance(result, float) and abs(result - round(result)) < 1e-9:
+            result = round(result)
+        calc_state["result"] = str(result)
+        update_display()
+    except Exception:
+        calc_state["result"] = "Error"
+        update_display()
+
+def convert_to_fraction(b=None):
+    try:
+        value = float(calc_state["result"])
+        frac_str = dec2frac(value)
+        calc_state["result"] = frac_str
+        update_display()
+    except Exception:
+        calc_state["result"] = "Error"
+        update_display()
+
+# --- Unary Operation Helpers for Factorial and Inverse ---
+def apply_unary_operation(op):
+    """Replace the last number in the expression with op(number)."""
+    expr = calc_state["expression"]
+    # This regex matches the last number (integer or decimal) at the end of the expression.
+    match = re.search(r'(-?\d+(?:\.\d+)?)\s*$', expr)
+    if match:
+        num_str = match.group(1)
+        new_expr = expr[:match.start()] + f"{op}({num_str})"
+        calc_state["expression"] = new_expr
+        update_display()
+
+def apply_factorial(b=None):
+    apply_unary_operation("fact")
+
+def apply_inverse(b=None):
+    apply_unary_operation("inv")
+
+# --- Create Buttons with BUTTON_TEXT_STYLE applied ---
+btn_clear = widgets.Button(description="C", button_style="warning", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_back = widgets.Button(description="⌫", button_style="warning", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_clear.on_click(clear_calc)
+btn_back.on_click(backspace)
+
+btn_asin = widgets.Button(description="sin⁻¹", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_acos = widgets.Button(description="cos⁻¹", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_atan = widgets.Button(description="tan⁻¹", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_asin.on_click(lambda b: append_to_expr("asin("))
+btn_acos.on_click(lambda b: append_to_expr("acos("))
+btn_atan.on_click(lambda b: append_to_expr("atan("))
+
+btn_sin = widgets.Button(description="sin", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_cos = widgets.Button(description="cos", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_tan = widgets.Button(description="tan", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_ln  = widgets.Button(description="ln", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_log = widgets.Button(description="log", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_sin.on_click(lambda b: append_to_expr("sin("))
+btn_cos.on_click(lambda b: append_to_expr("cos("))
+btn_tan.on_click(lambda b: append_to_expr("tan("))
+btn_ln.on_click(lambda b: append_to_expr("ln("))
+btn_log.on_click(lambda b: append_to_expr("log("))
+
+btn_sqrt = widgets.Button(description="√", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_cbrt = widgets.Button(description="∛", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_nth = widgets.Button(description="nth", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_frac = widgets.Button(description="Frac", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_sqrt.on_click(lambda b: append_to_expr("sqrt("))
+btn_cbrt.on_click(lambda b: append_to_expr("cbrt("))
+btn_nth.on_click(lambda b: append_to_expr(" nth "))
+btn_frac.on_click(convert_to_fraction)
+
+btn_x2   = widgets.Button(description="x²", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_x3   = widgets.Button(description="x³", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_xy   = widgets.Button(description="x^y", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_fact = widgets.Button(description="!", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_inv  = widgets.Button(description="1/x", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_x2.on_click(lambda b: append_to_expr("**2"))
+btn_x3.on_click(lambda b: append_to_expr("**3"))
+btn_xy.on_click(lambda b: append_to_expr("**"))
+# Instead of appending text, apply the operation on the last number.
+btn_fact.on_click(apply_factorial)
+btn_inv.on_click(apply_inverse)
+
+btn_nCr  = widgets.Button(description="nCr", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_nPr  = widgets.Button(description="nPr", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_pi   = widgets.Button(description="π", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_e    = widgets.Button(description="e", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_open = widgets.Button(description="(", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_close= widgets.Button(description=")", button_style="info", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_nCr.on_click(lambda b: append_to_expr(" C "))
+btn_nPr.on_click(lambda b: append_to_expr(" P "))
+btn_pi.on_click(lambda b: append_to_expr("pi"))
+btn_e.on_click(lambda b: append_to_expr("e"))
+btn_open.on_click(lambda b: append_to_expr("("))
+btn_close.on_click(lambda b: append_to_expr(")"))
+
+numeric_buttons = [
+    "7", "8", "9", "/",
+    "4", "5", "6", "*",
+    "1", "2", "3", "-",
+    "0", ".", "+", "="
+]
+num_buttons = []
+for desc in numeric_buttons:
+    if desc == "=":
+        btn = widgets.Button(description=desc, button_style="success", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+        btn.on_click(calculate)
+    else:
+        btn = widgets.Button(description=desc, layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+        btn.on_click(lambda b, d=desc: append_to_expr(d))
+    num_buttons.append(btn)
+
+grid = widgets.GridBox(num_buttons,
+                         layout=widgets.Layout(
+                             grid_template_columns=f"repeat(4, {BUTTON_WIDTH})",
+                             grid_gap="5px"
+                         ))
+grid_box = widgets.HBox([grid], layout=widgets.Layout(justify_content='flex-end'))
+
+btn_equals_top = widgets.Button(description="=", button_style="success", layout=small_button_layout, style=BUTTON_TEXT_STYLE)
+btn_equals_top.on_click(calculate)
+
+top_row = widgets.HBox([btn_equals_top, btn_clear, btn_back], layout=widgets.Layout(justify_content='flex-end'))
+inv_trig_row = widgets.HBox([btn_asin, btn_acos, btn_atan], layout=widgets.Layout(justify_content='flex-end'))
+func_row1 = widgets.HBox([btn_sin, btn_cos, btn_tan, btn_ln, btn_log], layout=widgets.Layout(justify_content='flex-end'))
+func_row2 = widgets.HBox([btn_sqrt, btn_cbrt, btn_nth, btn_frac], layout=widgets.Layout(justify_content='flex-end'))
+func_row3 = widgets.HBox([btn_x2, btn_x3, btn_xy, btn_fact, btn_inv], layout=widgets.Layout(justify_content='flex-end'))
+func_row4 = widgets.HBox([btn_nCr, btn_nPr, btn_pi, btn_e, btn_open, btn_close], layout=widgets.Layout(justify_content='flex-end'))
+
+# Assemble the UI with the new editable expression input at the top.
+calc_ui = widgets.VBox([
+    expression_input,
+    result_display,
+    top_row,
+    inv_trig_row,
+    func_row1,
+    func_row2,
+    func_row3,
+    func_row4,
+    grid_box
+])
+update_display()
+display(calc_ui)

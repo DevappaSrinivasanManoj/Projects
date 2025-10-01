@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<link rel="manifest" href="manifest.json">
+	<meta name="theme-color" content="#ffffff">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra Modern Exercise Tracker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #232526, #414345);
+            color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 500px;
+            margin: 40px auto;
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 18px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            padding: 32px 24px 24px 24px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.2em;
+            margin-bottom: 18px;
+            letter-spacing: 1px;
+        }
+        .tracker-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        select, button {
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-size: 1em;
+        }
+        button {
+            background: linear-gradient(90deg, #00c6ff, #0072ff);
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: linear-gradient(90deg, #0072ff, #00c6ff);
+        }
+        .history {
+            margin-top: 24px;
+        }
+        .history-title {
+            font-size: 1.1em;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .history-list li {
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .streak {
+            margin-top: 18px;
+            font-size: 1.2em;
+            text-align: center;
+            color: #00e676;
+            font-weight: bold;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 18px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        label[for="importFile"] {
+            background: linear-gradient(90deg, #ff512f, #dd2476);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        label[for="importFile"]:hover {
+            background: linear-gradient(90deg, #dd2476, #ff512f);
+        }
+        @media (max-width: 600px) {
+            .container {
+                max-width: 98vw;
+                padding: 12px 4vw 18px 4vw;
+            }
+            h1 {
+                font-size: 1.3em;
+            }
+            .tracker-form, .actions, .history, .collapsible-section {
+                font-size: 1em;
+            }
+            .history-list li {
+                font-size: 0.98em;
+                padding: 8px 6px;
+            }
+            .streak {
+                font-size: 1em;
+            }
+            .input-maincat {
+                width: 100% !important;
+                margin-bottom: 8px;
+            }
+            .btn-maincat {
+                width: 100%;
+                margin-bottom: 8px;
+            }
+        }
+        .collapsible-section {
+            margin-top: 18px;
+            margin-bottom: 10px;
+        }
+        .collapsible {
+            background: linear-gradient(90deg, #ff512f, #dd2476);
+            color: #fff;
+            cursor: pointer;
+            padding: 10px 18px;
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            text-align: left;
+            outline: none;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .collapsible.active, .collapsible:hover {
+            background: linear-gradient(90deg, #dd2476, #ff512f);
+        }
+        .collapsible-content {
+            padding: 0 0 0 0;
+            display: none;
+            overflow: hidden;
+            background: rgba(255,255,255,0.03);
+            border-radius: 0 0 8px 8px;
+        }
+        .collapsible-content > div {
+            margin: 10px 0 0 0;
+        }
+        .input-maincat {
+            width: 60%;
+            padding: 8px;
+            border-radius: 8px;
+            border: none;
+            margin-right: 8px;
+            margin-bottom: 0;
+            font-size: 1em;
+        }
+        .btn-maincat {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: none;
+            background: linear-gradient(90deg, #00c6ff, #0072ff);
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 1em;
+        }
+        .btn-maincat:hover {
+            background: linear-gradient(90deg, #0072ff, #00c6ff);
+        }
+        .btn-del-subcat {
+            margin: 0 6px 6px 0;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: none;
+            background: #ff1744;
+            color: #fff;
+            font-size: 0.95em;
+            cursor: pointer;
+        }
+        .btn-del-subcat:hover {
+            background: #d50000;
+        }
+        .btn-del-maincat {
+            margin: 0 6px 6px 0;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: none;
+            background: #ff9800;
+            color: #fff;
+            font-size: 0.95em;
+            cursor: pointer;
+        }
+        .btn-del-maincat:hover {
+            background: #e65100;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Exercise Tracker</h1>
+        <form class="tracker-form" id="trackerForm">
+            <select id="exerciseType" required></select>
+            <select id="subCategory" style="display:none;"></select>
+            <button type="submit">Mark Today's Exercise</button>
+        </form>
+        <div class="actions">
+            <button id="exportBtn">Export CSV</button>
+            <label for="importFile">Import CSV</label>
+            <input type="file" id="importFile" accept=".csv">
+        </div>
+        <div class="collapsible-section">
+            <button class="collapsible" id="toggleCat">+ Add/Edit Categories</button>
+            <div class="collapsible-content" id="catContent">
+                <div style="margin-top:10px;">
+                    <input id="newMainCat" type="text" placeholder="Add new main category" class="input-maincat">
+                    <button id="addMainCatBtn" class="btn-maincat">Add Main Category</button>
+                </div>
+                <div style="margin-top:10px;">
+                    <select id="addSubCatMain" class="input-maincat"></select>
+                    <input id="newSubCat" type="text" placeholder="Add new sub-category" class="input-maincat">
+                    <button id="addSubCatBtn" class="btn-maincat">Add Sub-category</button>
+                </div>
+                <div id="subCatDeleteDiv" style="margin:10px 0 0 0;"></div>
+                <div id="mainCatDeleteDiv" style="margin:10px 0 0 0;"></div>
+            </div>
+        </div>
+        <div class="streak" id="streak"></div>
+        <div class="collapsible-section">
+            <button class="collapsible" id="toggleHistory">+ History (Last 3 Months)</button>
+            <div class="collapsible-content" id="historyContent">
+                <div class="history-title">History (Last 3 Months)</div>
+                <ul class="history-list" id="historyList"></ul>
+            </div>
+        </div>
+    </div>
+    <script>
+        // IndexedDB setup
+        const DB_NAME = 'exercise_tracker_db';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'exercises';
+        const MAX_RECORDS = 92; // About 3 months
+        let db, currentStreak = parseInt(localStorage.getItem('exercise_streak') || '0');
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = function(e) {
+                    db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'date' });
+                    }
+                };
+                request.onsuccess = function(e) {
+                    db = e.target.result;
+                    resolve(db);
+                };
+                request.onerror = function(e) {
+                    reject(e);
+                };
+            });
+        }
+
+        function addExercise(record) {
+            return new Promise(async (resolve, reject) => {
+                await openDB();
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                store.put(record);
+                tx.oncomplete = async function() {
+                    await enforceMaxRecords();
+                    resolve();
+                };
+                tx.onerror = function(e) {
+                    reject(e);
+                };
+            });
+        }
+
+        function getAllExercises() {
+            return new Promise(async (resolve, reject) => {
+                await openDB();
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.getAll();
+                request.onsuccess = function(e) {
+                    // Descending order (latest first)
+                    resolve(e.target.result.sort((a, b) => new Date(b.date) - new Date(a.date)));
+                };
+                request.onerror = function(e) {
+                    reject(e);
+                };
+            });
+        }
+
+        function deleteOldestExercise() {
+            return new Promise(async (resolve, reject) => {
+                const all = await getAllExercises();
+                if (all.length > 0) {
+                    const oldest = all[0];
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    store.delete(oldest.date);
+                    tx.oncomplete = function() { resolve(); };
+                    tx.onerror = function(e) { reject(e); };
+                } else {
+                    resolve();
+                }
+            });
+        }
+
+        async function enforceMaxRecords() {
+            const all = await getAllExercises();
+            while (all.length > MAX_RECORDS) {
+                await deleteOldestExercise();
+                all.shift();
+            }
+        }
+
+        function formatDate(dateStr) {
+            // Use local time
+            const d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function getTodayISO() {
+            // Use local time
+            const d = new Date();
+            d.setHours(0,0,0,0);
+            // Get local date in ISO format (YYYY-MM-DD)
+            const offset = d.getTimezoneOffset();
+            const localDate = new Date(d.getTime() - offset * 60000);
+            return localDate.toISOString().split('T')[0];
+        }
+
+        function updateHistory() {
+            getAllExercises().then(records => {
+                const list = document.getElementById('historyList');
+                list.innerHTML = '';
+                records.forEach(r => {
+                    let desc = '';
+                    const cats = getCategories();
+                    const cat = cats.find(c => c.value === r.type);
+                    if (cat && cat.sub && cat.sub.length > 0) {
+                        const sub = cat.sub.find(s => s.value === r.sub);
+                        desc = cat.name + (sub ? ` (${sub.name})` : '');
+                    } else if (cat) {
+                        desc = cat.name;
+                    } else {
+                        desc = r.type;
+                    }
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span>${formatDate(r.date)}: <b>${desc}</b></span>`;
+                    list.appendChild(li);
+                });
+                updateStreak(records);
+            });
+        }
+
+        function updateStreak(records) {
+            if (!records || records.length === 0) {
+                currentStreak = 0;
+                localStorage.setItem('exercise_streak', '0');
+                document.getElementById('streak').textContent = 'No streak yet!';
+                return;
+            }
+            let streak = 1;
+            let prev = new Date(records[0].date);
+            for (let i = 1; i < records.length; i++) {
+                const curr = new Date(records[i].date);
+                const diff = (prev - curr) / (1000 * 60 * 60 * 24);
+                if (diff === 1) {
+                    streak++;
+                    prev = curr;
+                } else if (diff > 1) {
+                    break;
+                }
+            }
+            // Always show the higher of imported streak or calculated streak
+            currentStreak = Math.max(currentStreak, streak);
+            localStorage.setItem('exercise_streak', currentStreak.toString());
+            document.getElementById('streak').textContent = `Current Streak: ${currentStreak} day${currentStreak > 1 ? 's' : ''}`;
+        }
+
+        // Category management
+        // No default categories
+        function getCategories() {
+            const cats = localStorage.getItem('exercise_categories');
+            if (cats) return JSON.parse(cats);
+            localStorage.setItem('exercise_categories', JSON.stringify([]));
+            return [];
+        }
+        function setCategories(cats) {
+            localStorage.setItem('exercise_categories', JSON.stringify(cats));
+        }
+
+        function renderMainCategories() {
+            const cats = getCategories();
+            const sel = document.getElementById('exerciseType');
+            sel.innerHTML = '<option value="" disabled selected>Select Exercise Type</option>';
+            cats.forEach(cat => {
+                sel.innerHTML += `<option value="${cat.value}">${cat.name}</option>`;
+            });
+            renderMainCatDeleteUI();
+        }
+        function renderSubCategories(mainVal) {
+            const cats = getCategories();
+            const cat = cats.find(c => c.value === mainVal);
+            const subSel = document.getElementById('subCategory');
+            const subDelDiv = document.getElementById('subCatDeleteDiv');
+            if (cat && cat.sub && cat.sub.length > 0) {
+                subSel.style.display = 'block';
+                subSel.innerHTML = '<option value="" disabled selected>Select Sub-category</option>';
+                cat.sub.forEach(s => {
+                    subSel.innerHTML += `<option value="${s.value}">${s.name}</option>`;
+                });
+                // Show delete UI
+                subDelDiv.style.display = 'block';
+                subDelDiv.innerHTML = '<b>Delete sub-category:</b> ';
+                cat.sub.forEach(s => {
+                    const btn = document.createElement('button');
+                    btn.textContent = s.name + ' ✕';
+                    btn.className = 'btn-del-subcat';
+                    btn.onclick = function() { deleteSubCategory(mainVal, s.value); };
+                    subDelDiv.appendChild(btn);
+                });
+            } else {
+                subSel.style.display = 'none';
+                subSel.innerHTML = '';
+                subDelDiv.style.display = 'none';
+                subDelDiv.innerHTML = '';
+            }
+        }
+        function renderAddSubCatMain() {
+            const cats = getCategories();
+            const sel = document.getElementById('addSubCatMain');
+            sel.innerHTML = '';
+            cats.forEach(cat => {
+                sel.innerHTML += `<option value="${cat.value}">${cat.name}</option>`;
+            });
+        }
+        function renderMainCatDeleteUI() {
+            let delDiv = document.getElementById('mainCatDeleteDiv');
+            if (!delDiv) {
+                delDiv = document.createElement('div');
+                delDiv.id = 'mainCatDeleteDiv';
+                delDiv.style.margin = '10px 0 0 0';
+                document.getElementById('catContent').appendChild(delDiv);
+            }
+            const cats = getCategories();
+            delDiv.innerHTML = cats.length ? '<b>Delete main category:</b> ' : '';
+            cats.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.textContent = cat.name + ' ✕';
+                btn.className = 'btn-del-maincat';
+                btn.onclick = function() { deleteMainCategory(cat.value); };
+                delDiv.appendChild(btn);
+            });
+        }
+
+        // Add main category
+        function addMainCategory(name) {
+            if (!name.trim()) return;
+            const cats = getCategories();
+            const value = name.trim().toLowerCase().replace(/\s+/g, '_');
+            if (cats.some(c => c.value === value)) return;
+            cats.push({ name: name.trim(), value, sub: [] });
+            setCategories(cats);
+            renderMainCategories();
+            renderAddSubCatMain();
+        }
+        // Add sub-category
+        function addSubCategory(mainVal, subName) {
+            if (!subName.trim()) return;
+            const cats = getCategories();
+            const cat = cats.find(c => c.value === mainVal);
+            if (!cat) return;
+            const value = subName.trim().toLowerCase().replace(/\s+/g, '_');
+            if (cat.sub.some(s => s.value === value)) return;
+            cat.sub.push({ name: subName.trim(), value });
+            setCategories(cats);
+            renderSubCategories(mainVal);
+            renderAddSubCatMain();
+        }
+        // Delete sub-category
+        function deleteSubCategory(mainVal, subVal) {
+            const cats = getCategories();
+            const cat = cats.find(c => c.value === mainVal);
+            if (!cat) return;
+            cat.sub = cat.sub.filter(s => s.value !== subVal);
+            setCategories(cats);
+            renderSubCategories(mainVal);
+            renderAddSubCatMain();
+        }
+        // Delete main category
+        function deleteMainCategory(mainVal) {
+            let cats = getCategories();
+            cats = cats.filter(c => c.value !== mainVal);
+            setCategories(cats);
+            renderMainCategories();
+            renderAddSubCatMain();
+            // If the deleted main category was selected, reset sub-category UI
+            const sel = document.getElementById('exerciseType');
+            if (sel.value === mainVal) {
+                document.getElementById('subCategory').style.display = 'none';
+                document.getElementById('subCategory').innerHTML = '';
+                document.getElementById('subCatDeleteDiv').style.display = 'none';
+                document.getElementById('subCatDeleteDiv').innerHTML = '';
+            }
+        }
+
+        document.getElementById('addMainCatBtn').onclick = function(e) {
+            e.preventDefault();
+            const val = document.getElementById('newMainCat').value;
+            addMainCategory(val);
+            document.getElementById('newMainCat').value = '';
+        };
+        document.getElementById('addSubCatBtn').onclick = function(e) {
+            e.preventDefault();
+            const mainVal = document.getElementById('addSubCatMain').value;
+            const subVal = document.getElementById('newSubCat').value;
+            addSubCategory(mainVal, subVal);
+            document.getElementById('newSubCat').value = '';
+        };
+
+        document.getElementById('exerciseType').addEventListener('change', function() {
+            renderSubCategories(this.value);
+        });
+
+        document.getElementById('trackerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const type = document.getElementById('exerciseType').value;
+            let sub = '';
+            const cats = getCategories();
+            const cat = cats.find(c => c.value === type);
+            if (cat && cat.sub && cat.sub.length > 0) {
+                sub = document.getElementById('subCategory').value;
+                if (!sub) {
+                    alert('Please select a sub-category for ' + cat.name + '.');
+                    return;
+                }
+            }
+            const today = getTodayISO();
+            const record = { date: today, type, sub };
+            await addExercise(record);
+            updateHistory();
+        });
+
+        // Export CSV (with streak and categories)
+        document.getElementById('exportBtn').addEventListener('click', async function() {
+            const records = await getAllExercises();
+            let csv = 'date,type,sub\n';
+            records.forEach(r => {
+                csv += `${r.date},${r.type},${r.sub || ''}\n`;
+            });
+            csv += `STREAK,${currentStreak},\n`;
+            // Export categories as JSON
+            const cats = localStorage.getItem('exercise_categories') || '[]';
+            csv += `CATEGORIES,${btoa(encodeURIComponent(cats))},\n`;
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'exercise_backup.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // Import CSV (with streak and categories)
+        document.getElementById('importFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(ev) {
+                const text = ev.target.result;
+                const lines = text.split('\n').filter(l => l.trim().length > 0);
+                if (lines[0].toLowerCase().includes('date')) lines.shift();
+                let imported = [];
+                let importedStreak = 0;
+                let importedCats = null;
+                for (const line of lines) {
+                    if (line.startsWith('STREAK')) {
+                        const parts = line.split(',');
+                        importedStreak = parseInt(parts[1]) || 0;
+                        continue;
+                    }
+                    if (line.startsWith('CATEGORIES')) {
+                        const parts = line.split(',');
+                        try {
+                            importedCats = JSON.parse(decodeURIComponent(atob(parts[1])));
+                        } catch (e) { importedCats = []; }
+                        continue;
+                    }
+                    const [date, type, sub] = line.split(',');
+                    if (date && type) {
+                        imported.push({ date, type, sub });
+                    }
+                }
+                await openDB();
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                store.clear();
+                tx.oncomplete = async function() {
+                    for (const rec of imported) {
+                        await addExercise(rec);
+                    }
+                    if (importedCats) setCategories(importedCats);
+                    currentStreak = importedStreak;
+                    localStorage.setItem('exercise_streak', currentStreak.toString());
+                    renderMainCategories();
+                    renderAddSubCatMain();
+                    updateHistory();
+                    // Show imported streak
+                    document.getElementById('streak').textContent = `Current Streak: ${currentStreak} day${currentStreak > 1 ? 's' : ''}`;
+                };
+            };
+            reader.readAsText(file);
+        });
+
+        // Collapsible logic
+        const collBtn = document.getElementById('toggleCat');
+        const collContent = document.getElementById('catContent');
+        collBtn.addEventListener('click', function() {
+            this.classList.toggle('active');
+            if (collContent.style.display === 'block') {
+                collContent.style.display = 'none';
+            } else {
+                collContent.style.display = 'block';
+            }
+        });
+        // Start collapsed
+        collContent.style.display = 'none';
+
+        // Collapsible logic for history
+        const histBtn = document.getElementById('toggleHistory');
+        const histContent = document.getElementById('historyContent');
+        histBtn.addEventListener('click', function() {
+            this.classList.toggle('active');
+            if (histContent.style.display === 'block') {
+                histContent.style.display = 'none';
+            } else {
+                histContent.style.display = 'block';
+            }
+        });
+        histContent.style.display = 'none';
+
+        // On load
+        renderMainCategories();
+        renderAddSubCatMain();
+        document.getElementById('exerciseType').dispatchEvent(new Event('change'));
+        openDB().then(updateHistory);
+    </script>
+	<script>
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.register('service-worker.js')
+			.then(() => console.log('Service Worker registered'));
+		}
+	</script>
+</body>
+</html>
