@@ -1,9 +1,0 @@
-Things I need from this
-
-Track the books and movies read/watched along with directors and authors. Also track the ratings
-Separate panes for movies and books, but similar UI for both
-When logged a book it must track the time and date when it was done.
-Total number of books read, movies watched must be shown when I am in the corresponding pane
-There has to be an option to filter books/movies by year, author, rating. once this is done, I must be able to see the count of books/movies for the same as well
-An option to export and import this data so that the app can be used with continuation when I purchase a new device and have the app there.
-An option to search for the book title to see if I have already completed reading the book

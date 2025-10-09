@@ -1,5 +1,0 @@
-Run the below in the terminal to start the server in develop mode.
-python3 main_file.py
-
-Run as below to start the server as prod deployment mode.
-gunicorn -w 4 -b 0.0.0.0:5000 main_file:app
