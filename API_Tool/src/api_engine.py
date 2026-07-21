@@ -70,6 +70,7 @@ EXTRACTOR_MAP_FILENAME = "extractors.map.json"  # stored in working folder
 
 # ------------------------------ Global settings ------------------------------
 DISABLE_SSL: bool = False
+FOLLOW_REDIRECTS: bool = True
 
 # -- NEW: per-request extractor cache (in-memory) + sidecar path --
 _REQUEST_EXTRACTORS: Dict[str, List[Dict[str, Any]]] = {}
@@ -81,6 +82,11 @@ def _req_key(method: str, template_url: str, item_path: Optional[str]) -> str:
 def set_disable_ssl(flag: bool) -> None:
     global DISABLE_SSL
     DISABLE_SSL = bool(flag)
+
+
+def set_follow_redirects(flag: bool) -> None:
+    global FOLLOW_REDIRECTS
+    FOLLOW_REDIRECTS = bool(flag)
 
 
 # ------------------------------- Logging (flush) -----------------------------
@@ -179,13 +185,25 @@ def _sanitize_url(url: str) -> str:
     safe_query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, safe_query, parsed.fragment))
 
+
 def send_request(method: str, url: str, headers: Dict[str, str], body: bytes, timeout: float = 60.0
 ) -> Tuple[int, str, Dict[str, str], bytes]:
     url = _sanitize_url(url)
     req = urllib.request.Request(url=url, data=(body if body else None), headers=headers, method=method.upper())
     context = build_ssl_context(DISABLE_SSL)
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
+        if FOLLOW_REDIRECTS:
+            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
+        else:
+            # Custom redirect handler that stops following redirects
+            class _NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None  # Do not follow
+            opener = urllib.request.build_opener(
+                _NoRedirect,
+                urllib.request.HTTPSHandler(context=context),
+            )
+        with opener.open(req, timeout=timeout) as resp:
             status = getattr(resp, "status", 200)
             reason = getattr(resp, "reason", "")
             resp_headers = dict(resp.headers.items())
@@ -276,20 +294,18 @@ def _read_item_extractors(it: Dict[str, Any]) -> List[Dict[str, Any]]:
 def flatten_postman_items(items: List[Dict[str, Any]], parent: str = "") -> List[Dict[str, Any]]:
     flattened: List[Dict[str, Any]] = []
     for it in items or []:
-        # 1. Keep the 'clean_name' separate from the 'folder_path'
         clean_name = it.get("name") or "unnamed"
-        folder_path = f"{parent}/{clean_name}" if parent else clean_name
         
         if "item" in it:
-            # It's a folder, recurse deeper
+            # It's a folder, recurse deeper — use folder name in the path
+            folder_path = f"{parent}/{clean_name}" if parent else clean_name
             flattened.extend(flatten_postman_items(it["item"], parent=folder_path))
         else:
-            # It's a request
+            # It's a request — path is just the parent folder (not including request name)
             req = it.get("request")
             if not req: 
                 continue
                 
-            # --- FIX: Define 'method' and 'url_str' BEFORE using them in _req_key ---
             method = (req.get("method") or "GET").upper()
             url_str = postman_url_to_str(req.get("url"))
             headers = postman_headers_to_dict(req.get("header", []))
@@ -298,21 +314,36 @@ def flatten_postman_items(items: List[Dict[str, Any]], parent: str = "") -> List
             # Carry per-item extractors from Postman (x-apitool-extract)
             extractors = it.get("x-apitool-extract") or it.get("x_apitool_extract") or []
 
-            # Add to the flattened list (Using 'clean_name' for the sidebar)
+            # Extract pre-request and test scripts from Postman event array
+            prerequest_script = ""
+            test_script = ""
+            for evt in (it.get("event") or []):
+                listen = evt.get("listen", "")
+                script_obj = evt.get("script", {})
+                exec_lines = script_obj.get("exec", [])
+                script_text = "\n".join(exec_lines) if isinstance(exec_lines, list) else str(exec_lines or "")
+                if listen == "prerequest":
+                    prerequest_script = script_text
+                elif listen == "test":
+                    test_script = script_text
+
+            # path = parent folder path only (empty string if at root)
             flattened.append({
                 "name": clean_name,  
-                "path": folder_path, 
+                "path": f"{parent}/{clean_name}" if parent else "", 
                 "method": method,
                 "url": url_str, 
                 "headers": headers, 
                 "body_bytes": body_bytes,
-                "extractors": extractors
+                "extractors": extractors,
+                "prerequest_script": prerequest_script,
+                "test_script": test_script,
             })
 
             # Pull vendor extract rules into in-memory cache
             try:
                 if extractors:
-                    # Now 'method' and 'url_str' are safely defined
+                    folder_path = f"{parent}/{clean_name}" if parent else clean_name
                     k = _req_key(method, url_str, folder_path)
                     _REQUEST_EXTRACTORS[k] = list(extractors)
             except Exception:
@@ -661,7 +692,10 @@ def _parse_header_line(h: str) -> Tuple[str, str]:
     return h.strip(), ""
 
 def parse_curl(curl_str: str, folder: Optional[Path] = None) -> Tuple[str, str, Dict[str, str], bytes]:
-    tokens = shlex.split(curl_str)
+    # Normalize line continuations and Windows line endings before tokenizing
+    curl_str = curl_str.replace("\r\n", "\n").replace("\r", "\n")
+    curl_str = curl_str.replace("\\\n", " ")  # join backslash-continued lines
+    tokens = shlex.split(curl_str, posix=True)
     if tokens and tokens[0].lower() == "curl": tokens = tokens[1:]
     method: Optional[str] = None
     url: str = ""
@@ -755,12 +789,16 @@ def parse_curl(curl_str: str, folder: Optional[Path] = None) -> Tuple[str, str, 
         if t == "--url":
             if i + 1 < len(tokens): url = tokens[i + 1]; i += 2; continue
             i += 1; continue
-        if t in ("--insecure", "-k"):
+        if t in ("--insecure", "-k", "--location", "-L", "--compressed", "--silent", "-s"):
             i += 1; continue
         if not t.startswith("-"):
             url = t
             i += 1
             continue
+        # Unrecognized flag — skip it (and its value if it looks like --flag value)
+        i += 1
+        if t.startswith("--") and "=" not in t and i < len(tokens) and not tokens[i].startswith("-"):
+            i += 1  # skip the value argument too
 
     if form_fields and body_bytes is None:
         body_bytes = json.dumps(form_fields).encode("utf-8")
@@ -1492,7 +1530,7 @@ def run_cli_interactive(folder: Path) -> None:
         else:
             print("Invalid choice; continuing to next request.")
             continue
-
+            
 
 def export_session_jsonl_to_postman(folder, collection_name="Export", delete_temp_vars=False):
     """

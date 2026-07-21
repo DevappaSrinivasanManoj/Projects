@@ -3,7 +3,7 @@ import json
 class ResponseFormatter:
     @staticmethod
     def format_ui_response(gui, body_text):
-        """Returns a pretty-printed JSON string if possible, else returns original."""
+        """Returns a pretty-printed JSON string if possible, else best-effort formatted."""
         if not body_text: 
             return ""
             
@@ -23,11 +23,14 @@ class ResponseFormatter:
             # 4. Return the prettified version
             return json.dumps(parsed, indent=4, ensure_ascii=False)
             
-        except Exception as e:
-            # If you want to see why it's failing, uncomment the line below:
-            # print(f"JSON Formatting Error: {e}")
-            
-            # Fallback: Return original data as a safe string
+        except Exception:
+            # Fallback: best-effort format even if malformed
             if isinstance(body_text, bytes):
-                return body_text.decode("utf-8", errors="replace")
-            return str(body_text)
+                data = body_text.decode("utf-8", errors="replace")
+            else:
+                data = str(body_text)
+            try:
+                from text_helpers import best_effort_pretty_print
+                return best_effort_pretty_print(data.strip())
+            except Exception:
+                return data

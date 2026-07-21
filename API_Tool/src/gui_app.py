@@ -60,7 +60,7 @@ class ApiGuiApp(tk.Tk):
 
         # State
         import os
-        self.folder = Path("artifacts").resolve()
+        self.folder = (Path(__file__).resolve().parent.parent / "artifacts")
         os.makedirs(self.folder, exist_ok=True) # Ensure folder exists
         self.logger = eng.configure_logger(self.folder / "logger.txt")
         eng._load_extractors(self.folder)  # NEW
@@ -92,10 +92,43 @@ class ApiGuiApp(tk.Tk):
         self._last_template_url: str = ""
         self._last_method: str = "GET"
         self._last_item_path: Optional[str] = None  # if loaded from collection
+
+        # --- Theme / styling ---
+        self.configure(background="#e8f0fe")  # light blue background
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure(".", background="#e8f0fe", foreground="#1a1a1a",
+                        font=("Segoe UI", 9, "bold"))
+        style.configure("TFrame", background="#e8f0fe")
+        style.configure("TLabelframe", background="#e8f0fe")
+        style.configure("TLabelframe.Label", background="#e8f0fe", foreground="#1a1a1a",
+                        font=("Segoe UI", 9, "bold"))
+        style.configure("TLabel", background="#e8f0fe", foreground="#1a1a1a")
+        style.configure("TButton", font=("Segoe UI", 9, "bold"))
+        style.configure("TNotebook", background="#e8f0fe")
+        style.configure("TNotebook.Tab", font=("Segoe UI", 9, "bold"))
+        style.configure("TPanedwindow", background="#e8f0fe")
+
         self._build_menu()
         self._build_layout()
         self._update_ssl_label()
+        self._update_redirects_label()
         self.bind_all("<Control-f>", self._on_ctrl_f)
+
+        # Apply text widget enhancements (undo/redo, smart double-click)
+        from text_helpers import setup_text_widgets
+        setup_text_widgets(self)
+
+        # Attach autocomplete for {{variable}} placeholders
+        from autocomplete import setup_autocomplete
+        setup_autocomplete(self)
+
+        # Attach Ctrl+Click JSON path picker on response body
+        from json_path_picker import bind_json_path_picker
+        bind_json_path_picker(self)
+
+        # Intercept window close for auto-save prompt
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # Start queue pump
         self.after(100, self._process_queue)
@@ -118,6 +151,7 @@ class ApiGuiApp(tk.Tk):
 
         settings = tk.Menu(menubar, tearoff=0)
         settings.add_command(label="Toggle Disable SSL (global)", command=self.toggle_ssl)
+        settings.add_command(label="Toggle Follow Redirects (global)", command=self.toggle_redirects)
         menubar.add_cascade(label="Settings", menu=settings)
 
         self.config(menu=menubar)
@@ -133,6 +167,8 @@ class ApiGuiApp(tk.Tk):
         self.lbl_progress.pack(side=tk.RIGHT, padx=(8, 0))
         self.lbl_ssl = ttk.Label(top, text="")
         self.lbl_ssl.pack(side=tk.RIGHT)
+        self.lbl_redirects = ttk.Label(top, text="")
+        self.lbl_redirects.pack(side=tk.RIGHT, padx=(8, 0))
 
         main = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
         main.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
@@ -145,10 +181,10 @@ class ApiGuiApp(tk.Tk):
 
         frm_coll = ttk.LabelFrame(left, text="Collection Items")
         frm_coll.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-        self.lst_items = tk.Listbox(frm_coll)
-        self.lst_items.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        from tree_sidebar import TreeSidebar
+        self._tree_sidebar = TreeSidebar(frm_coll, self)
+        self.lst_items = self._tree_sidebar  # compatibility alias
         from collection_editor import CollectionEditor; CollectionEditor.inject_controls(self, frm_coll)
-        self.lst_items.bind("<<ListboxSelect>>", self.on_select_item)
 
         right_split = ttk.Panedwindow(right, orient=tk.VERTICAL)
         right_split.pack(fill=tk.BOTH, expand=True)
@@ -195,33 +231,35 @@ class ApiGuiApp(tk.Tk):
 
         self.ent_url = ttk.Entry(row1_inner)
         self.ent_url.grid(row=0, column=0, sticky="we")
+        self.ent_url.bind("<Return>", lambda e: self.send_request())
         ttk.Button(row1_inner, text="Send", command=self.send_request).grid(row=0, column=1, sticky="e", padx=(8, 0))
         frm_req.columnconfigure(1, weight=1)
         frm_req.columnconfigure(3, weight=1)
 
         row_btns = ttk.Frame(frm_req)
         row_btns.grid(row=2, column=0, columnspan=4, sticky="we", padx=4, pady=(0, 4))
-        row_btns.columnconfigure(0, weight=1)
 
-        left_actions = ttk.Frame(row_btns)
-        left_actions.grid(row=0, column=0, sticky="w")
-        ttk.Button(left_actions, text="Copy as cURL", command=self.copy_as_curl).pack(side=tk.LEFT)
-        ttk.Button(left_actions, text="Paste cURL...", command=self.open_curl_popup).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(left_actions, text="Load Postman Collection...", command=self.load_collection).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(left_actions, text="Run...", command=self.open_run_dialog).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(left_actions, text="Cancel Run", command=lambda: setattr(self, "_batch_cancelled", True)).pack(side=tk.LEFT, padx=(8, 0))
-
-        right_actions = ttk.Frame(row_btns)
-        right_actions.grid(row=0, column=1, sticky="e")
-
+        # Row 1: cURL, Load, Run..., Cancel, Validate, Compare
+        row1 = ttk.Frame(row_btns)
+        row1.pack(fill=tk.X, pady=(0, 2))
+        ttk.Button(row1, text="Copy as cURL", command=self.copy_as_curl).pack(side=tk.LEFT)
+        ttk.Button(row1, text="Paste cURL...", command=self.open_curl_popup).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(row1, text="Load Postman Collection...", command=self.load_collection).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(row1, text="Run...", command=self.open_run_dialog).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(row1, text="Cancel Run", command=lambda: setattr(self, "_batch_cancelled", True)).pack(side=tk.LEFT, padx=(8, 0))
         self.validate_schema_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(right_actions, text="Validate schema", variable=self.validate_schema_var).pack(side=tk.LEFT)
+        ttk.Checkbutton(row1, text="Validate schema", variable=self.validate_schema_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(
-            right_actions, text="Compare", variable=self.compare_var, command=self._on_compare_toggled
+            row1, text="Compare", variable=self.compare_var, command=self._on_compare_toggled
         ).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(right_actions, text="Set Collection Variables", command=self.open_set_collect_vars_dialog).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(right_actions, text="Run Collection (All)", command=self.run_collection_series_now).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(right_actions, text="Run N Times...", command=self.open_run_collection_n_dialog).pack(side=tk.LEFT, padx=(8, 0))
+
+        # Row 2: Collection Variables, Run Collection, Run Selected, Run N Times
+        row2 = ttk.Frame(row_btns)
+        row2.pack(fill=tk.X)
+        ttk.Button(row2, text="Set Collection Variables", command=self.open_set_collect_vars_dialog).pack(side=tk.LEFT)
+        ttk.Button(row2, text="Run Collection (All)", command=self.open_run_collection_delay_dialog).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(row2, text="Run Selected...", command=self.open_selective_run_dialog).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(row2, text="Run N Times...", command=self.open_run_collection_n_dialog).pack(side=tk.LEFT, padx=(8, 0))
 
         req_tabs = ttk.Notebook(frm_req)
         req_tabs.grid(row=3, column=0, columnspan=4, sticky="nsew", padx=4, pady=4)
@@ -260,6 +298,11 @@ class ApiGuiApp(tk.Tk):
         ttk.Label(tab_headers, text="Headers (JSON or 'Key: Value' per line)").pack(anchor="w", padx=4, pady=(4, 0))
         self.txt_headers = tk.Text(tab_headers, height=8)
         self.txt_headers.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        # Alternating line colors for readability (against light blue app background)
+        self.txt_headers.tag_configure("even_line", background="#c8e6c9")
+        self.txt_headers.tag_configure("odd_line", background="#f5f9ff")
+        self.txt_headers.bind("<KeyRelease>", lambda e: self._colorize_headers())
+        self.txt_headers.bind("<<Modified>>", lambda e: self._colorize_headers())
 
         tab_body = ttk.Frame(req_tabs)
         req_tabs.add(tab_body, text="Body")
@@ -270,7 +313,24 @@ class ApiGuiApp(tk.Tk):
         ttk.Button(btns, text="Clear Body", command=lambda: self.txt_payload.delete("1.0", tk.END)).pack(side=tk.LEFT, padx=2)
 
         self.txt_payload = tk.Text(tab_body)
+        payload_scroll = ttk.Scrollbar(tab_body, orient=tk.VERTICAL, command=self.txt_payload.yview)
+        self.txt_payload.configure(yscrollcommand=payload_scroll.set)
+        payload_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.txt_payload.pack(fill=tk.BOTH, expand=True, padx=4, pady=(4, 2))
+
+        # --- Pre-request Script tab ---
+        tab_prerequest = ttk.Frame(req_tabs)
+        req_tabs.add(tab_prerequest, text="Pre-request Script")
+        ttk.Label(tab_prerequest, text="Runs before the request is sent (Python with pm.* API)").pack(anchor="w", padx=4, pady=(4, 0))
+        self.txt_prerequest = tk.Text(tab_prerequest, height=8)
+        self.txt_prerequest.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        # --- Tests (Post-response Script) tab ---
+        tab_tests = ttk.Frame(req_tabs)
+        req_tabs.add(tab_tests, text="Tests")
+        ttk.Label(tab_tests, text="Runs after the response is received (Python with pm.* API)").pack(anchor="w", padx=4, pady=(4, 0))
+        self.txt_tests = tk.Text(tab_tests, height=8)
+        self.txt_tests.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
         frm_resp = ttk.LabelFrame(response_host, text="Response")
         frm_resp.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
@@ -289,6 +349,9 @@ class ApiGuiApp(tk.Tk):
         self.nb_resp.add(tab_body, text="Body")
         self._resp_tab_body = tab_body
         self.txt_resp_body = tk.Text(tab_body)
+        resp_body_scroll = ttk.Scrollbar(tab_body, orient=tk.VERTICAL, command=self.txt_resp_body.yview)
+        self.txt_resp_body.configure(yscrollcommand=resp_body_scroll.set)
+        resp_body_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.txt_resp_body.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
         tab_resp_headers = ttk.Frame(self.nb_resp)
@@ -326,6 +389,69 @@ class ApiGuiApp(tk.Tk):
     # ---------------------------- Helpers ------------------------------------
     def _update_ssl_label(self):
         self.lbl_ssl.config(text=f"SSL verification: {'DISABLED' if eng.DISABLE_SSL else 'ENABLED'}")
+
+    def _update_redirects_label(self):
+        self.lbl_redirects.config(text=f"Redirects: {'ON' if eng.FOLLOW_REDIRECTS else 'OFF'}")
+
+    def _flash_response(self):
+        """Brief visual flash on response area to indicate a new response arrived."""
+        flash_color = "#a5d6a7"  # medium green, visible against light blue
+        try:
+            original_bg = self.txt_resp_body.cget("background") or "#f5f9ff"
+        except Exception:
+            original_bg = "#f5f9ff"
+        self.txt_resp_body.config(background=flash_color)
+        self.after(300, lambda: self.txt_resp_body.config(background=original_bg))
+
+    def _colorize_headers(self):
+        """Applies alternating background colors to each line in the headers widget."""
+        txt = self.txt_headers
+        txt.tag_remove("even_line", "1.0", tk.END)
+        txt.tag_remove("odd_line", "1.0", tk.END)
+        line_count = int(txt.index("end-1c").split(".")[0])
+        for i in range(1, line_count + 1):
+            tag = "even_line" if i % 2 == 0 else "odd_line"
+            txt.tag_add(tag, f"{i}.0", f"{i}.end")
+        # Reset modified flag to allow future events
+        try:
+            txt.edit_modified(False)
+        except Exception:
+            pass
+
+    def _colorize_json(self, txt_widget: tk.Text):
+        """Colorize JSON keys and values in a Text widget. Keys = blue, values = green."""
+        txt_widget.tag_remove("json_key", "1.0", tk.END)
+        txt_widget.tag_remove("json_value", "1.0", tk.END)
+        txt_widget.tag_config("json_key", foreground="#0451a5")
+        txt_widget.tag_config("json_value", foreground="#098658")
+
+        # Pattern: lines in pretty-printed JSON look like:  "key": value
+        # We match the key (quoted string before colon) and the value portion after colon
+        content = txt_widget.get("1.0", "end-1c")
+        for i, line in enumerate(content.split("\n"), start=1):
+            # Match "key": ...
+            m = re.match(r'^(\s*)"(.+?)"\s*:', line)
+            if m:
+                indent_len = len(m.group(1))
+                key_start = indent_len  # the opening quote
+                key_end = indent_len + len(m.group(2)) + 2  # includes both quotes
+                txt_widget.tag_add("json_key", f"{i}.{key_start}", f"{i}.{key_end}")
+
+                # Value starts after the colon+space
+                colon_pos = line.index(":", key_end)
+                val_start = colon_pos + 1
+                # Skip whitespace after colon
+                while val_start < len(line) and line[val_start] == " ":
+                    val_start += 1
+                val_text = line[val_start:].rstrip(",")
+                if val_text and val_text not in ("{", "[", "{}", "[]"):
+                    txt_widget.tag_add("json_value", f"{i}.{val_start}", f"{i}.{len(line.rstrip(','))}")
+            else:
+                # Standalone array values (e.g. items in a list)
+                stripped = line.strip().rstrip(",")
+                if stripped and stripped not in ("{", "}", "[", "]", "},", "],"):
+                    indent_len = len(line) - len(line.lstrip())
+                    txt_widget.tag_add("json_value", f"{i}.{indent_len}", f"{i}.{indent_len + len(stripped)}")
 
     def choose_folder(self):
         sel = filedialog.askdirectory(initialdir=str(self.folder))
@@ -437,9 +563,24 @@ class ApiGuiApp(tk.Tk):
             pass
 
     def _on_ctrl_f(self, _evt=None):
-        self.open_response_search()
+        # Capture which text widget had focus BEFORE the search dialog steals it
+        target = None
+        try:
+            focused = self.focus_get()
+            if focused is self.txt_payload:
+                target = self.txt_payload
+        except Exception:
+            pass
+        self.open_response_search(target_widget=target)
 
     def _get_active_response_text_widget(self) -> Optional[tk.Text]:
+        # Auto-detect: if the request payload has focus, search there instead
+        try:
+            focused = self.focus_get()
+            if focused is self.txt_payload:
+                return self.txt_payload
+        except Exception:
+            pass
         try:
             tab = self.nb_resp.select()
         except Exception:
@@ -454,94 +595,9 @@ class ApiGuiApp(tk.Tk):
             return self.txt_compare_details
         return self.txt_resp_body
 
-    def open_response_search(self):
-        if getattr(self, "_search_win", None) is not None:
-            try:
-                self._search_win.lift()
-                self._search_ent.focus_set()
-                return
-            except Exception:
-                self._search_win = None
-
-        win = tk.Toplevel(self)
-        win.title("Find (Response)")
-        win.geometry("520x120")
-        self._search_win = win
-
-        row = ttk.Frame(win)
-        row.pack(fill=tk.X, padx=10, pady=10)
-        ttk.Label(row, text="Find:").pack(side=tk.LEFT)
-        ent = ttk.Entry(row)
-        ent.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0))
-        self._search_ent = ent
-
-        row2 = ttk.Frame(win)
-        row2.pack(fill=tk.X, padx=10, pady=(0, 10))
-
-        def clear_highlight(txt: tk.Text):
-            try:
-                txt.tag_remove("search_hit", "1.0", tk.END)
-            except Exception:
-                pass
-
-        def highlight_at(txt: tk.Text, start: str, end: str):
-            clear_highlight(txt)
-            try:
-                txt.tag_add("search_hit", start, end)
-                txt.tag_config("search_hit", background="#fff59d")
-                txt.see(start)
-                txt.mark_set("insert", end)
-            except Exception:
-                pass
-
-        def find_next():
-            txt = self._get_active_response_text_widget()
-            if txt is None:
-                return
-            q = ent.get()
-            if not q:
-                return
-            start = txt.index("insert")
-            idx = txt.search(q, start, stopindex=tk.END, nocase=True)
-            if not idx:
-                idx = txt.search(q, "1.0", stopindex=tk.END, nocase=True)
-            if idx:
-                end = f"{idx}+{len(q)}c"
-                highlight_at(txt, idx, end)
-
-        def find_prev():
-            txt = self._get_active_response_text_widget()
-            if txt is None:
-                return
-            q = ent.get()
-            if not q:
-                return
-            start = txt.index("insert")
-            idx = txt.search(q, start, stopindex="1.0", backwards=True, nocase=True)
-            if not idx:
-                idx = txt.search(q, tk.END, stopindex="1.0", backwards=True, nocase=True)
-            if idx:
-                end = f"{idx}+{len(q)}c"
-                highlight_at(txt, idx, end)
-
-        ttk.Button(row2, text="Prev", command=find_prev).pack(side=tk.LEFT)
-        ttk.Button(row2, text="Next", command=find_next).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(row2, text="Close", command=win.destroy).pack(side=tk.RIGHT)
-
-        def on_close():
-            try:
-                txt = self._get_active_response_text_widget()
-                if txt is not None:
-                    clear_highlight(txt)
-            except Exception:
-                pass
-            self._search_win = None
-            win.destroy()
-
-        win.protocol("WM_DELETE_WINDOW", on_close)
-        win.transient(self)
-        win.grab_set()
-        ent.focus_set()
+    def open_response_search(self, target_widget=None):
+        from search_manager import open_response_search
+        open_response_search(self, target_widget)
 
     def _split_url_simple(self, url: str):
         base = url or ""
@@ -710,6 +766,7 @@ class ApiGuiApp(tk.Tk):
         try:
             self.txt_resp_body.delete("1.0", tk.END)
             self.txt_resp_body.insert(tk.END, body_text if body_text else "(empty)")
+            self._colorize_json(self.txt_resp_body)
         except Exception:
             pass
         self._last_resp_headers = dict(headers or {})
@@ -757,6 +814,7 @@ class ApiGuiApp(tk.Tk):
             self.txt_resp_body.insert(tk.END, preview[:MAX_UI_BODY_CHARS] + "\n\n[Truncated in UI; full content in logger.txt]")
         else:
             self.txt_resp_body.insert(tk.END, preview)
+        self._colorize_json(self.txt_resp_body)
         try:
             self.nb_resp.select(0)
         except Exception:
@@ -895,68 +953,143 @@ class ApiGuiApp(tk.Tk):
         raw = self.txt_payload.get("1.0", tk.END).strip()
         if not raw:
             return
+        # Clear any previous error highlight
+        self.txt_payload.tag_remove("json_error_line", "1.0", tk.END)
         try:
             obj = json.loads(raw)
             self.txt_payload.delete("1.0", tk.END)
             self.txt_payload.insert(tk.END, json.dumps(obj, indent=2))
-        except json.JSONDecodeError:
-            messagebox.showwarning("Pretty JSON", "Payload is not valid JSON; showing raw unchanged.")
+            self._colorize_json(self.txt_payload)
+        except json.JSONDecodeError as e:
+            # Still format it best-effort so the user can see structure and fix it
+            from text_helpers import best_effort_pretty_print, find_error_line_in_pretty, highlight_error_line
+            formatted = best_effort_pretty_print(raw)
+            self.txt_payload.delete("1.0", tk.END)
+            self.txt_payload.insert(tk.END, formatted)
+            self._colorize_json(self.txt_payload)
+            # Highlight the error line in red
+            err_line = find_error_line_in_pretty(formatted, e)
+            highlight_error_line(self.txt_payload, err_line)
+            messagebox.showwarning("Pretty JSON", f"JSON has a syntax error:\n{e.msg} (around line {e.lineno})\n\nFormatted best-effort. Error line highlighted in red.")
 
     def open_curl_popup(self):
-        win = tk.Toplevel(self)
-        win.title("Paste cURL")
-        win.geometry("900x420")
-
-        txt = tk.Text(win, height=12)
-        txt.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
-        self.txt_curl = txt
-
-        def _on_close():
-            try:
-                if getattr(self, "txt_curl", None) is txt:
-                    self.txt_curl = None
-            except Exception:
-                pass
-            win.destroy()
-
-        btns = ttk.Frame(win)
-        btns.pack(fill=tk.X, padx=8, pady=(0, 8))
-        ttk.Button(btns, text="Parse cURL", command=self.parse_curl).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Close", command=_on_close).pack(side=tk.RIGHT)
-
-        win.protocol("WM_DELETE_WINDOW", _on_close)
-        win.transient(self)
-        win.grab_set()
-        txt.focus_set()
+        from curl_handler import open_curl_popup
+        open_curl_popup(self)
 
     def parse_curl(self):
-        txt = getattr(self, "txt_curl", None)
-        if txt is None:
-            messagebox.showwarning("Parse cURL", "Open Paste cURL... first.")
-            return
-        curl_cmd = txt.get("1.0", tk.END).strip()
-        if not curl_cmd:
-            messagebox.showwarning("Parse cURL", "Please paste a cURL command.")
-            return
-        try:
-            method, url, headers, body = eng.parse_curl(curl_cmd, folder=self.folder)
-        except Exception as e:
-            messagebox.showerror("Parse cURL", f"Failed to parse cURL: {e}")
-            return
-        self.method_var.set(method)
-        self.ent_url.delete(0, tk.END)
-        self.ent_url.insert(0, url)
-        self.txt_headers.delete("1.0", tk.END)
-        if headers:
-            self.txt_headers.insert(tk.END, json.dumps(headers, indent=2))
-        self.txt_payload.delete("1.0", tk.END)
-        if body:
-            try:
-                self.txt_payload.insert(tk.END, body.decode("utf-8"))
-            except Exception:
-                self.txt_payload.insert(tk.END, "[binary payload]")
-        messagebox.showinfo("Parse cURL", "Parsed and populated the request builder.")
+        from curl_handler import parse_curl
+        parse_curl(self)
 
+    def _close_curl_popup(self):
+        from curl_handler import _close_curl_popup
+        _close_curl_popup(self)
+
+    def clear_collection(self):
+        """Resets the collection state, sidebar, and UI fields to a blank slate."""
+        # Clear session controller
+        self.ctrl.requests.clear()
+        self.ctrl.last_index = None
+
+        # Clear sidebar listbox
+        self.lst_items.delete(0, tk.END)
+
+        # Clear UI fields
+        self.ent_name.delete(0, tk.END)
+        self.method_var.set("GET")
+        self.ent_url.delete(0, tk.END)
+        self.txt_headers.delete("1.0", tk.END)
+        self.txt_payload.delete("1.0", tk.END)
+        self.txt_prerequest.delete("1.0", tk.END)
+        self.txt_tests.delete("1.0", tk.END)
+
+        # Clear response view
+        self._clear_response_view()
+
+    def new_request(self):
+        """Deselects current item and clears UI for a fresh request."""
+        # Save current request state before switching away
+        if self.ctrl.last_index is not None and self.ctrl.last_index < len(self.ctrl.requests):
+            self.ctrl.requests[self.ctrl.last_index].update({
+                "name": self.ent_name.get().strip(),
+                "method": self.method_var.get(),
+                "url": self.ent_url.get(),
+                "headers": self._parse_headers_from_text(self.txt_headers.get("1.0", "end-1c")),
+                "body_bytes": self.txt_payload.get("1.0", "end-1c").encode("utf-8"),
+                "prerequest_script": self.txt_prerequest.get("1.0", "end-1c"),
+                "test_script": self.txt_tests.get("1.0", "end-1c"),
+            })
+
+        # Deselect and reset tracking
+        self.lst_items.selection_clear(0, tk.END)
+        self.ctrl.last_index = None
+
+        # Clear UI fields
+        self.ent_name.delete(0, tk.END)
+        self.method_var.set("GET")
+        self.ent_url.delete(0, tk.END)
+        self.txt_headers.delete("1.0", tk.END)
+        self.txt_payload.delete("1.0", tk.END)
+        self.txt_prerequest.delete("1.0", tk.END)
+        self.txt_tests.delete("1.0", tk.END)
+        self._clear_response_view()
+
+    def _on_close(self):
+        """Intercepts window close — prompts to save collection before exiting."""
+        # If nothing loaded, just close
+        if not self.ctrl.requests:
+            self.destroy()
+            return
+
+        # Save current UI state to the active request before exporting
+        if self.ctrl.last_index is not None and self.ctrl.last_index < len(self.ctrl.requests):
+            self.ctrl.requests[self.ctrl.last_index].update({
+                "name": self.ent_name.get().strip(),
+                "method": self.method_var.get(),
+                "url": self.ent_url.get(),
+                "headers": self._parse_headers_from_text(self.txt_headers.get("1.0", "end-1c")),
+                "body_bytes": self.txt_payload.get("1.0", "end-1c").encode("utf-8"),
+                "prerequest_script": self.txt_prerequest.get("1.0", "end-1c"),
+                "test_script": self.txt_tests.get("1.0", "end-1c"),
+            })
+
+        answer = messagebox.askyesnocancel(
+            "Save Collection",
+            "Do you want to save the current collection before closing?"
+        )
+        if answer is None:
+            # Cancel — don't close
+            return
+        if answer:
+            # Yes — export with timestamp
+            try:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                collection_name = f"AutoSave_{timestamp}"
+
+                # Write session.jsonl
+                session_file = Path(self.folder) / "session.jsonl"
+                with open(session_file, "w", encoding="utf-8") as f:
+                    for req in self.ctrl.get_all():
+                        export_data = req.copy()
+                        if not export_data.get("name"):
+                            export_data["name"] = f"{req.get('method', 'GET')} {req.get('url', '')}"
+                        body = export_data.get("body_bytes", b"")
+                        if isinstance(body, bytes):
+                            export_data["body_bytes"] = body.decode("utf-8", errors="replace")
+                        # Remove non-serializable fields
+                        export_data.pop("last_response", None)
+                        f.write(json.dumps(export_data) + "\n")
+
+                # Export to Postman collection
+                eng.export_session_jsonl_to_postman(
+                    self.folder,
+                    collection_name=collection_name,
+                    delete_temp_vars=False
+                )
+            except Exception as e:
+                messagebox.showerror("Auto-Save Failed", f"Could not save collection:\n{e}")
+
+        self.destroy()
 
     def load_collection(self):
         p = filedialog.askopenfilename(
@@ -965,6 +1098,8 @@ class ApiGuiApp(tk.Tk):
         )
         if not p:
             return
+        # Clear stale state before loading new collection
+        self.clear_collection()
         try:
             items = eng.load_collection_items(Path(p))
             self.ctrl.load_initial_data(items)
@@ -975,17 +1110,8 @@ class ApiGuiApp(tk.Tk):
         self.lst_items.delete(0, tk.END)
         self._items_data = items  # store for selection
         
-        # --- FIXED LOOP: Prioritize the 'name' field ---
-        for it in items:
-            name = it.get("name")
-            if name and name.strip():
-                # If a custom name exists, show ONLY that name
-                display_text = name.strip()
-            else:
-                # Fallback: only show method and URL if name is missing
-                display_text = f"{it['method']:6s} {it['url']}"
-            
-            self.lst_items.insert(tk.END, display_text)
+        # Populate tree with folder structure (uses 'path' field from import)
+        self._tree_sidebar.populate_with_folders(items)
         
         messagebox.showinfo("Load Collection", f"Loaded {len(items)} items.")
         
@@ -1025,44 +1151,23 @@ class ApiGuiApp(tk.Tk):
     def on_select_item(self, _evt):
         self.ctrl.handle_selection(self)
 
+    def _show_listbox_context_menu(self, event):
+        """Handled by TreeSidebar._on_right_click now."""
+        pass
+
+    def _duplicate_request(self, idx):
+        """Handled by TreeSidebar._duplicate_request now."""
+        pass
+
     @staticmethod
     def _shlex_quote_join(parts):
-        def shlex_quote(s: str) -> str:
-            if not s:
-                return "''"
-            safe = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._/:?&=%")
-            if all(ch in safe for ch in s):
-                return s
-            return "'" + s.replace("'", "'\\''") + "'"
-        return " ".join(shlex_quote(p) for p in parts)
+        from curl_handler import _shlex_quote_join
+        return _shlex_quote_join(parts)
 
 
     def copy_as_curl(self):
-        method = self.method_var.get().upper()
-        url = self.ent_url.get().strip()
-        headers = self._parse_headers_from_text(self.txt_headers.get("1.0", tk.END))
-        body_text = self.txt_payload.get("1.0", tk.END)
-        body = body_text.encode("utf-8") if body_text.strip() else b""
-
-        # NEW: resolve collection variables for curl output
-        r_url, r_headers, r_body = eng._render_with_vars(self.folder, url, headers, body)
-
-        parts = ["curl"]
-        if method and method != "GET":
-            parts += ["-X", method]
-        for k, v in r_headers.items():
-            parts += ["-H", f"{k}: {v}"]
-        if r_body:
-            try:
-                parts += ["--data-raw", r_body.decode("utf-8").strip()]
-            except Exception:
-                pass
-        parts.append(r_url)
-
-        curl_str = self._shlex_quote_join(parts)
-        self.clipboard_clear()
-        self.clipboard_append(curl_str)
-        messagebox.showinfo("Copy as cURL", "cURL command copied to clipboard.")
+        from curl_handler import copy_as_curl
+        copy_as_curl(self)
 
 
     def send_request(self):
@@ -1080,6 +1185,28 @@ class ApiGuiApp(tk.Tk):
         if not url:
             messagebox.showwarning("Send Request", "URL is required.")
             return
+
+        # --- Run pre-request script ---
+        prerequest_script = self.txt_prerequest.get("1.0", "end-1c").strip()
+        if prerequest_script:
+            from pm_runtime import build_pm_context, run_script
+            pm_ctx = build_pm_context(
+                var_store=self.vars,
+                method=method, url=url,
+                req_headers=headers,
+                req_body=payload_text.strip()
+            )
+            err, script_output = run_script(prerequest_script, pm_ctx)
+            if script_output and script_output.strip():
+                eng.log_block(self.logger, "PRE-REQUEST SCRIPT OUTPUT", script_output.strip().splitlines())
+            if err:
+                messagebox.showwarning("Pre-request Script", err)
+            else:
+                # Apply any mutations the script made
+                method = pm_ctx.request.method or method
+                url = pm_ctx.request.url or url
+                headers = pm_ctx.request.headers or headers
+                body = (pm_ctx.request.body or "").encode("utf-8") if pm_ctx.request.body else body
 
         threading.Thread(
             target=self._do_request_thread,
@@ -1188,6 +1315,31 @@ class ApiGuiApp(tk.Tk):
                         elapsed_ms=self._last_resp_elapsed_ms,
                         size_bytes=self._last_resp_size_bytes
                     )
+                    self._flash_response()
+
+                    # --- Run post-response (Tests) script ---
+                    try:
+                        test_script = self.txt_tests.get("1.0", "end-1c").strip()
+                        if test_script:
+                            from pm_runtime import build_pm_context, run_script
+                            resp_body_text = (resp_body or b"").decode("utf-8", errors="replace")
+                            pm_ctx = build_pm_context(
+                                var_store=self.vars,
+                                status=status,
+                                resp_headers=resp_headers,
+                                resp_body=resp_body_text,
+                                method=method,
+                                url=resolved_url,
+                                req_headers=headers,
+                                req_body=(body or b"").decode("utf-8", errors="replace")
+                            )
+                            err, script_output = run_script(test_script, pm_ctx)
+                            if script_output and script_output.strip():
+                                eng.log_block(self.logger, "TESTS SCRIPT OUTPUT", script_output.strip().splitlines())
+                            if err:
+                                messagebox.showwarning("Tests Script", err)
+                    except Exception as e:
+                        messagebox.showwarning("Tests Script", f"Script error: {e}")
 
                     try:
                         if isinstance(req_index, int) and 0 <= req_index < len(self.ctrl.requests):
@@ -1298,6 +1450,10 @@ class ApiGuiApp(tk.Tk):
         eng.set_disable_ssl(not eng.DISABLE_SSL)
         self._update_ssl_label()
 
+    def toggle_redirects(self):
+        eng.set_follow_redirects(not eng.FOLLOW_REDIRECTS)
+        self._update_redirects_label()
+
     # ---------------------------- Variables Dialog (NEW) ----------------------
 
 
@@ -1315,11 +1471,30 @@ class ApiGuiApp(tk.Tk):
 
         txt = tk.Text(frm, height=18)
         txt.pack(fill=tk.BOTH, expand=True)
+        # Alternating line colors (same as headers)
+        txt.tag_configure("even_line", background="#c8e6c9")
+        txt.tag_configure("odd_line", background="#f5f9ff")
+
+        def _colorize_vars(*_):
+            txt.tag_remove("even_line", "1.0", tk.END)
+            txt.tag_remove("odd_line", "1.0", tk.END)
+            line_count = int(txt.index("end-1c").split(".")[0])
+            for i in range(1, line_count + 1):
+                tag = "even_line" if i % 2 == 0 else "odd_line"
+                txt.tag_add(tag, f"{i}.0", f"{i}.end")
+            try:
+                txt.edit_modified(False)
+            except Exception:
+                pass
+
+        txt.bind("<KeyRelease>", _colorize_vars)
+        txt.bind("<<Modified>>", _colorize_vars)
 
         # Load variables into key: value format
         self.vars.load()
         for k, v in self.vars.items():
             txt.insert(tk.END, f"{k}: {v}\n")
+        _colorize_vars()
 
         def save():
             raw = txt.get("1.0", tk.END).strip()
@@ -1349,7 +1524,12 @@ class ApiGuiApp(tk.Tk):
         btns = ttk.Frame(frm)
         btns.pack(fill=tk.X, pady=6)
 
+        def save_and_close():
+            save()
+            win.destroy()
+
         ttk.Button(btns, text="Save", command=save).pack(side=tk.LEFT)
+        ttk.Button(btns, text="Save & Close", command=save_and_close).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(btns, text="Close", command=win.destroy).pack(side=tk.RIGHT)
 
 
@@ -1607,464 +1787,70 @@ class ApiGuiApp(tk.Tk):
 
 
 
-    # ---------------------------- Batch Run (unchanged logic; trimmed) --------
+    # ---------------------------- Batch Run (delegated to batch_runner.py) ----
     _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}")
 
     def _extract_placeholders(self, *texts: str) -> set:
-        keys = set()
-        for t in texts:
-            if not t:
-                continue
-            tmp = t.replace("{{{{", "\uE000").replace("}}}}", "\uE001")
-            for m in self._PLACEHOLDER_RE.finditer(tmp):
-                keys.add(m.group(1))
-        return keys
-
+        from batch_runner import _extract_placeholders
+        return _extract_placeholders(self, *texts)
 
     def _render_template(self, text: str, ctx: dict) -> str:
-        """
-        CSV templating: replace only placeholders that EXIST in ctx.
-        If a key is missing (e.g., {{env}}), LEAVE IT AS-IS so that
-        the collection-variable renderer can resolve it later.
-        Supports brace escapes: '{{{{' -> '{', '}}}}' -> '}'.
-        """
-        if not text:
-            return text
-        s = text.replace("{{{{", "\uE000").replace("}}}}", "\uE001")
-
-        def repl(m):
-            key = m.group(1)
-            if key in ctx:
-                return str(ctx[key])
-            # KEEP UNKNOWN PLACEHOLDERS
-            return m.group(0)
-
-        s = self._PLACEHOLDER_RE.sub(repl, s)
-        return s.replace("\uE000", "{").replace("\uE001", "}")
-
+        from batch_runner import _render_template
+        return _render_template(self, text, ctx)
 
     def _reset_progress(self):
-        self._batch_running = False
-        self._batch_cancelled = False
-        self._batch_total = 0
-        self._batch_completed = 0
-        self._parallel_executor = None
-        self._parallel_prev_compare_state = None
-        self._update_progress_label("")
+        from batch_runner import _reset_progress
+        _reset_progress(self)
 
     def _update_progress_label(self, text: str):
-        try:
-            self.lbl_progress.config(text=text)
-        except Exception:
-            pass
+        from batch_runner import _update_progress_label
+        _update_progress_label(self, text)
 
     def _increment_progress(self):
-        self._batch_completed += 1
-        self._update_progress_label(f"{self._batch_completed}/{self._batch_total}")
-        if self._batch_completed >= self._batch_total:
-            if self._parallel_prev_compare_state is not None:
-                try:
-                    self.compare_var.set(self._parallel_prev_compare_state)
-                except Exception:
-                    pass
-            self._parallel_prev_compare_state = None
-            self._batch_running = False
+        from batch_runner import _increment_progress
+        _increment_progress(self)
 
     def _series_runner_same(self, n: int, delay_ms: int, method: str, url: str, headers: dict, body: bytes):
-        selection = self.lst_items.curselection()
-        req_index = self.ctrl.last_index if self.ctrl.last_index is not None else (selection[0] if selection else 0)
-        for i in range(n):
-            if self._batch_cancelled:
-                break
-            self._do_request_thread(req_index, method, url, dict(headers), body)
-            self.after(0, self._increment_progress)
-            if i < n - 1 and delay_ms > 0:
-                time.sleep(max(0, delay_ms) / 1000.0)
+        from batch_runner import _series_runner_same
+        _series_runner_same(self, n, delay_ms, method, url, headers, body)
 
     def _parallel_runner_same(self, n: int, workers: int, method: str, url: str, headers: dict, body: bytes):
-        selection = self.lst_items.curselection()
-        req_index = self.ctrl.last_index if self.ctrl.last_index is not None else (selection[0] if selection else 0)
-        self._parallel_prev_compare_state = bool(self.compare_var.get())
-        try:
-            self.compare_var.set(False)
-        except Exception:
-            pass
-        workers = max(1, int(workers or 1))
-        self._parallel_executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="apigui-par")
-        futures = []
-        try:
-            for _ in range(n):
-                if self._batch_cancelled:
-                    break
-                fut = self._parallel_executor.submit(self._do_request_thread, req_index, method, url, dict(headers), body)
-                futures.append(fut)
-                fut.add_done_callback(lambda _f: self.after(0, self._increment_progress))
-        finally:
-            if self._batch_cancelled:
-                try:
-                    self._parallel_executor.shutdown(wait=False, cancel_futures=True)
-                except TypeError:
-                    self._parallel_executor.shutdown(wait=False)
-                self._parallel_executor = None
-            else:
-                self._parallel_executor.shutdown(wait=True)
-                self._parallel_executor = None
+        from batch_runner import _parallel_runner_same
+        _parallel_runner_same(self, n, workers, method, url, headers, body)
 
     def _series_runner_csv(self, rows: List[Dict[str, str]], method: str,
                            url_tmpl: str, headers_tmpl: str, body_tmpl: str, delay_ms: int):
-        selection = self.lst_items.curselection()
-        req_index = self.ctrl.last_index if self.ctrl.last_index is not None else (selection[0] if selection else 0)
-        header = list(rows[0].keys()) if rows else []
-        for i, row in enumerate(rows, start=1):
-            if self._batch_cancelled:
-                break
-            ctx = {k: ("" if row.get(k) is None else str(row.get(k))) for k in header}
-            url = self._render_template(url_tmpl, ctx).strip()
-            hdrs_text = self._render_template(headers_tmpl, ctx)
-            body_text = self._render_template(body_tmpl, ctx)
-            headers = self._parse_headers_from_text(hdrs_text)
-            body = body_text.encode("utf-8") if body_text.strip() else b""
-            url, headers, body = eng._render_with_vars(self.folder, url, headers, body)
-            self._do_request_thread(req_index, method, url, headers, body)
-            self.after(0, self._increment_progress)
-            if i < self._batch_total and delay_ms > 0:
-                time.sleep(max(0, delay_ms) / 1000.0)
+        from batch_runner import _series_runner_csv
+        _series_runner_csv(self, rows, method, url_tmpl, headers_tmpl, body_tmpl, delay_ms)
 
-
-
-    # --- BEGIN ADD: Dialog for entering N for running collection N times ---
     def open_run_collection_n_dialog(self):
-        if not hasattr(self, "_items_data") or not self._items_data:
-            messagebox.showwarning("Run N Times", "No collection loaded.")
-            return
+        from batch_runner import open_run_collection_n_dialog
+        open_run_collection_n_dialog(self)
 
-        win = tk.Toplevel(self)
-        win.title("Run Collection N Times")
-        win.transient(self); win.grab_set()
+    def run_collection_n_times(self, n: int, delay_ms: int = 0):
+        from batch_runner import run_collection_n_times
+        run_collection_n_times(self, n, delay_ms)
 
-        ttk.Label(win, text="How many times?").pack(padx=10, pady=10)
-        n_var = tk.StringVar(value="1")
-        ent = ttk.Entry(win, textvariable=n_var, width=10)
-        ent.pack(padx=10, pady=5)
+    def open_run_collection_delay_dialog(self):
+        from batch_runner import open_run_collection_delay_dialog
+        open_run_collection_delay_dialog(self)
 
-        def on_start():
-            try:
-                n = int(n_var.get())
-                if n <= 0:
-                    raise ValueError
-            except ValueError:
-                messagebox.showerror("Run N Times", "Enter a valid positive number.")
-                return
-            win.destroy()
-            self.run_collection_n_times(n)
-
-        ttk.Button(win, text="Start", command=on_start).pack(padx=10, pady=10)
-    # --- END ADD ---
-
-
-
-    # --- BEGIN ADD: Run full collection N times ---
-    def run_collection_n_times(self, n: int):
-        """Runs the entire collection N times using the existing series runner."""
-        if not hasattr(self, "_items_data") or not self._items_data:
-            messagebox.showwarning("Run Collection", "No collection loaded.")
-            return
-
-        # Total requests to run = items_count * n
-        total_items = len(self._items_data)
-        total_runs = total_items * n
-
-        if self._batch_running:
-            messagebox.showwarning("Run Collection", "Another batch is already active.")
-            return
-
-        # init existing batch state
-        self._batch_running = True
-        self._batch_cancelled = False
-        self._batch_total = total_runs
-        self._batch_completed = 0
-        self._update_progress_label(f"0/{total_runs}")
-
-        try:
-            self._parallel_prev_compare_state = bool(self.compare_var.get())
-            self.compare_var.set(False)
-        except Exception:
-            self._parallel_prev_compare_state = None
-
-        items = list(self.ctrl.requests or [])
-
-        def _runner():
-            try:
-                for _ in range(n):
-                    if self._batch_cancelled:
-                        break
-                    for req_index, it in enumerate(items):
-                        if self._batch_cancelled:
-                            break
-                        method = (it.get("method") or "GET").upper()
-                        tmpl_url = it.get("url") or ""
-                        headers = dict(it.get("headers") or {})
-                        body = it.get("body_bytes") or b""
-
-                        r_url, r_headers, r_body = eng._render_with_vars(self.folder, tmpl_url, headers, body)
-                        self._do_request_thread(req_index, method, tmpl_url, r_headers, r_body)
-
-                        self.after(0, self._increment_progress)
-            finally:
-                def _done_ui():
-                    if self._parallel_prev_compare_state is not None:
-                        try:
-                            self.compare_var.set(self._parallel_prev_compare_state)
-                        except Exception:
-                            pass
-                    self._parallel_prev_compare_state = None
-                    self._batch_running = False
-                self.after(0, _done_ui)
-
-        threading.Thread(target=_runner, daemon=True).start()
-    # --- END ADD ---
-
-
-    # --- BEGIN ADD: series runner for entire collection ---
-    def run_collection_series_now(self):
-        """Run all loaded collection items one-by-one (series), applying {{vars}} and extractors between requests."""
-        # Preconditions
-        if not hasattr(self, "_items_data") or not self._items_data:
-            messagebox.showwarning("Run Collection", "No collection items loaded.")
-            return
-        if self._batch_running:
-            messagebox.showwarning("Run Collection", "Another batch run is already in progress.")
-            return
-
-        items = list(self.ctrl.requests or [])  # current order
-        total = len(items)
-        if total <= 0:
-            messagebox.showwarning("Run Collection", "Collection has no request items to run.")
-            return
-
-        # Initialize batch state (reuse your existing progress mechanism)
-        self._batch_running = True
-        self._batch_cancelled = False
-        self._batch_total = total
-        self._batch_completed = 0
-        self._update_progress_label(f"0/{total}")
-
-        # Optional: disable Compare during batch (avoid pairwise compare interference)
-        try:
-            self._parallel_prev_compare_state = bool(self.compare_var.get())
-            self.compare_var.set(False)
-        except Exception:
-            self._parallel_prev_compare_state = None
-
-        def _series_runner():
-            try:
-                for i, it in enumerate(items, start=1):
-                    if self._batch_cancelled:
-                        break
-                    # Extract request parts from item
-                    method = (it.get("method") or "GET").upper()
-                    url_tmpl = it.get("url") or ""
-                    headers = dict(it.get("headers") or {})
-                    body_bytes = it.get("body_bytes") or b""
-
-                    # IMPORTANT: Render with collection variables right now (same as Send path)
-                    r_url, r_headers, r_body = eng._render_with_vars(self.folder, url_tmpl, headers, body_bytes)
-
-                    # Send using the existing thread-based sender (keeps UI responsive)
-                    self._do_request_thread(i - 1, method, url_tmpl, r_headers, r_body)
-
-                    # Progress tick in UI thread
-                    self.after(0, self._increment_progress)
-
-                    # Optional small pause to avoid hammering servers; adjust if you like
-                    # time.sleep(0.05)
-            finally:
-                # Restore Compare checkbox state when done
-                def _done_ui():
-                    if self._parallel_prev_compare_state is not None:
-                        try:
-                            self.compare_var.set(self._parallel_prev_compare_state)
-                        except Exception:
-                            pass
-                    self._parallel_prev_compare_state = None
-                    self._batch_running = False
-                self.after(0, _done_ui)
-
-        threading.Thread(target=_series_runner, daemon=True).start()
-    # --- END ADD: series runner for entire collection ---
+    def run_collection_series_now(self, delay_ms: int = 0):
+        from batch_runner import run_collection_series_now
+        run_collection_series_now(self, delay_ms)
 
     def _start_batch_run(self, source: str, mode: str, n: int, delay_ms: int, workers: int,
                          csv_path: Optional[Path], dlg: tk.Toplevel):
-        if self._batch_running:
-            messagebox.showwarning("Run", "A batch run is already in progress.")
-            return
-
-        method = self.method_var.get().upper()
-        url_current = self.ent_url.get().strip()
-        headers_text_current = self.txt_headers.get("1.0", tk.END)
-        body_text_current = self.txt_payload.get("1.0", tk.END)
-        headers_current = self._parse_headers_from_text(headers_text_current)
-        body_current = body_text_current.encode("utf-8") if body_text_current.strip() else b""
-
-        total = 0
-        rows_cache: List[Dict[str, str]] = []
-        if source == "same":
-            total = int(max(0, n))
-            if total <= 0:
-                messagebox.showerror("Run", "Please enter a positive Count (N).")
-                return
-        else:
-            if not csv_path or not csv_path.exists():
-                messagebox.showerror("Run (CSV)", "Please choose a valid CSV file.")
-                return
-            with open(csv_path, "r", encoding="utf-8", newline="") as f:
-                rdr = csv.DictReader(f)
-                rows_cache = list(rdr)
-                total = len(rows_cache)
-                if total <= 0:
-                    messagebox.showerror("Run (CSV)", "The CSV contains no data rows.")
-                    return
-
-        approx_per = max(512, len(headers_text_current) + len(body_text_current) + 1024)
-        if total * approx_per > 50 * 1024 * 1024:
-            messagebox.showwarning("Log size", "This run may generate a large log (> ~50 MB).")
-
-        self._batch_running = True
-        self._batch_cancelled = False
-        self._batch_total = total
-        self._batch_completed = 0
-        self._update_progress_label(f"0/{total}")
-
-        try:
-            for child in dlg.winfo_children():
-                if isinstance(child, (ttk.Entry, ttk.Button, ttk.Radiobutton, ttk.Combobox, ttk.Checkbutton)):
-                    child.configure(state=tk.DISABLED)
-        except Exception:
-            pass
-
-        def runner():
-            try:
-                if source == "same":
-                    if mode == "series":
-                        self._series_runner_same(total, int(delay_ms or 0),
-                                                 method, url_current, headers_current, body_current)
-                    else:
-                        self._parallel_runner_same(total, int(workers or 1),
-                                                   method, url_current, headers_current, body_current)
-                else:
-                    self._series_runner_csv(rows_cache, method,
-                                            url_current, headers_text_current, body_text_current,
-                                            int(delay_ms or 0))
-            finally:
-                def _done_ui():
-                    try:
-                        for child in dlg.winfo_children():
-                            if isinstance(child, (ttk.Entry, ttk.Button, ttk.Radiobutton, ttk.Combobox, ttk.Checkbutton)):
-                                child.configure(state=tk.NORMAL)
-                    except Exception:
-                        pass
-                    if self._parallel_prev_compare_state is not None:
-                        try:
-                            self.compare_var.set(self._parallel_prev_compare_state)
-                        except Exception:
-                            pass
-                    self._parallel_prev_compare_state = None
-                self.after(0, _done_ui)
-
-        threading.Thread(target=runner, daemon=True).start()
+        from batch_runner import _start_batch_run
+        _start_batch_run(self, source, mode, n, delay_ms, workers, csv_path, dlg)
 
     def open_run_dialog(self):
-        win = tk.Toplevel(self)
-        win.title("Run requests")
-        win.transient(self)
-        win.grab_set()
+        from batch_runner import open_run_dialog
+        open_run_dialog(self)
 
-        source_var = tk.StringVar(value="same")
-        mode_var = tk.StringVar(value="series")
-        n_var = tk.StringVar(value="10")
-        delay_var = tk.StringVar(value="0")
-        workers_var = tk.StringVar(value="4")
-        csv_path_var = tk.StringVar(value="")
-
-        frm = ttk.Frame(win); frm.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
-
-        ttk.Label(frm, text="Source").grid(row=0, column=0, sticky="w")
-        rb_same = ttk.Radiobutton(frm, text="Same Request", variable=source_var, value="same")
-        rb_csv = ttk.Radiobutton(frm, text="CSV Data File", variable=source_var, value="csv")
-        rb_same.grid(row=0, column=1, sticky="w", padx=6)
-        rb_csv.grid(row=0, column=2, sticky="w", padx=6)
-
-        ttk.Label(frm, text="Mode").grid(row=1, column=0, sticky="w")
-        rb_series = ttk.Radiobutton(frm, text="Series", variable=mode_var, value="series")
-        rb_parallel = ttk.Radiobutton(frm, text="Parallel (Same Request only)", variable=mode_var, value="parallel")
-        rb_series.grid(row=1, column=1, sticky="w", padx=6)
-        rb_parallel.grid(row=1, column=2, sticky="w", padx=6)
-
-        ttk.Label(frm, text="Count (N)").grid(row=2, column=0, sticky="w")
-        ent_n = ttk.Entry(frm, textvariable=n_var, width=12)
-        ent_n.grid(row=2, column=1, sticky="w", padx=6)
-
-        ttk.Label(frm, text="Delay (ms, series only)").grid(row=3, column=0, sticky="w")
-        ent_delay = ttk.Entry(frm, textvariable=delay_var, width=12)
-        ent_delay.grid(row=3, column=1, sticky="w", padx=6)
-
-        ttk.Label(frm, text="Workers (parallel)").grid(row=4, column=0, sticky="w")
-        ent_workers = ttk.Entry(frm, textvariable=workers_var, width=12)
-        ent_workers.grid(row=4, column=1, sticky="w", padx=6)
-
-        ttk.Label(frm, text="CSV file (UTF‑8, comma, header)").grid(row=5, column=0, sticky="w")
-        ent_csv = ttk.Entry(frm, textvariable=csv_path_var, width=50)
-        ent_csv.grid(row=5, column=1, columnspan=2, sticky="we", padx=6)
-        def choose_csv():
-            p = filedialog.askopenfilename(title="Choose CSV", filetypes=[("CSV", "*.csv"), ("All files", "*.*")])
-            if p:
-                csv_path_var.set(p)
-        ttk.Button(frm, text="Browse...", command=choose_csv).grid(row=5, column=3, sticky="w")
-        frm.columnconfigure(2, weight=1)
-
-        def refresh_states(*_):
-            src = source_var.get()
-            mode = mode_var.get()
-            csv_selected = (src == "csv")
-            if csv_selected:
-                mode_var.set("series")
-            rb_parallel.state(["disabled"] if csv_selected else ["!disabled"])
-            ent_n.state(["!disabled"] if src == "same" else ["disabled"])
-            ent_workers.state(["!disabled"] if (src == "same" and mode_var.get() == "parallel") else ["disabled"])
-            ent_csv.state(["!disabled"] if csv_selected else ["disabled"])
-
-        source_var.trace_add("write", refresh_states)
-        mode_var.trace_add("write", refresh_states)
-        refresh_states()
-
-        btns = ttk.Frame(win); btns.pack(fill=tk.X, padx=12, pady=(0,12))
-        def on_start():
-            src = source_var.get()
-            mode = mode_var.get()
-            try: n = int(n_var.get() or "0")
-            except ValueError: n = 0
-            try: delay_ms = int(delay_var.get() or "0")
-            except ValueError: delay_ms = 0
-            try: workers = int(workers_var.get() or "1")
-            except ValueError: workers = 1
-            csv_path = Path(csv_path_var.get()) if csv_path_var.get().strip() else None
-            self._start_batch_run(src, mode, n, delay_ms, workers, csv_path, win)
-
-        def on_cancel():
-            if not self._batch_running:
-                win.destroy()
-                return
-            self._batch_cancelled = True
-            if self._parallel_executor is not None:
-                try:
-                    self._parallel_executor.shutdown(wait=False, cancel_futures=True)
-                except TypeError:
-                    self._parallel_executor.shutdown(wait=False)
-                self._parallel_executor = None
-
-        ttk.Button(btns, text="Start", command=on_start).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=6)
-        ttk.Button(btns, text="Close", command=win.destroy).pack(side=tk.RIGHT)
+    def open_selective_run_dialog(self):
+        from batch_runner import open_selective_run_dialog
+        open_selective_run_dialog(self)
 
 if __name__ == "__main__":
     app = ApiGuiApp()

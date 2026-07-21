@@ -14,15 +14,15 @@ class SessionController:
         """Saves current UI data and loads the selected request's data."""
         # 1. Save UI state to the request we are leaving
         if self.last_index is not None:
-            # --- BEGIN MOD: Save HEADERS ---
             self.requests[self.last_index].update({
                 "name": gui.ent_name.get().strip(),
                 "method": gui.method_var.get(),
                 "url": gui.ent_url.get(),
                 "headers": gui._parse_headers_from_text(gui.txt_headers.get("1.0", "end-1c")),
-                "body_bytes": gui.txt_payload.get("1.0", "end-1c").encode("utf-8")
+                "body_bytes": gui.txt_payload.get("1.0", "end-1c").encode("utf-8"),
+                "prerequest_script": gui.txt_prerequest.get("1.0", "end-1c"),
+                "test_script": gui.txt_tests.get("1.0", "end-1c"),
             })
-            # --- END MOD ---
 
         # 2. Update the tracker to the new selection
         selection = gui.lst_items.curselection()
@@ -42,13 +42,13 @@ class SessionController:
         gui.ent_url.delete(0, tk.END)
         gui.ent_url.insert(0, data.get("url", ""))
         
-        # --- BEGIN MOD: Load HEADERS ---
+        # Load HEADERS
         gui.txt_headers.delete("1.0", tk.END)
         headers = data.get("headers", {})
         if headers:
             headers_text = "\n".join(f"{k}: {v}" for k, v in headers.items())
             gui.txt_headers.insert(tk.END, headers_text)
-        # --- END MOD ---
+        gui._colorize_headers()
         
         gui.txt_payload.delete("1.0", tk.END)
         body = data.get("body_bytes", b"")
@@ -56,6 +56,13 @@ class SessionController:
             gui.txt_payload.insert(tk.END, body.decode("utf-8", errors="replace"))
         else:
             gui.txt_payload.insert(tk.END, str(body))
+        gui._colorize_json(gui.txt_payload)
+
+        # Load scripts
+        gui.txt_prerequest.delete("1.0", tk.END)
+        gui.txt_prerequest.insert(tk.END, data.get("prerequest_script", ""))
+        gui.txt_tests.delete("1.0", tk.END)
+        gui.txt_tests.insert(tk.END, data.get("test_script", ""))
 
         try:
             snap = data.get("last_response")

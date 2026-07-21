@@ -23,13 +23,25 @@ APIs:
 
 import json
 import re
+import uuid
+import time
+import random
 from pathlib import Path
 from typing import Dict, Any, Iterable
 
 TEMP_VARS_FILENAME = "temp.collection.vars.json"
 
-# Postman-style {{var}} placeholders
-_VAR_RE = re.compile(r"\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}")
+# Postman-style {{var}} and {{$dynamicVar}} placeholders
+_VAR_RE = re.compile(r"\{\{\s*(\$?[A-Za-z0-9_.\-]+)\s*\}\}")
+
+# Dynamic variable generators (Postman-compatible)
+# Each call produces a fresh value — never cached.
+_DYNAMIC_VARS = {
+    "$randomUUID": lambda: str(uuid.uuid4()),
+    "$guid":       lambda: str(uuid.uuid4()),
+    "$timestamp":  lambda: str(int(time.time())),
+    "$randomInt":  lambda: str(random.randint(0, 1000)),
+}
 
 class TempVarStore:
     def __init__(self, path: Path):
@@ -83,6 +95,10 @@ class TempVarStore:
         self.load()
         def repl(m):
             k = m.group(1)
+            # Dynamic variables — generated fresh on every substitution
+            gen = _DYNAMIC_VARS.get(k)
+            if gen is not None:
+                return gen()
             return self.get(k, "")
         return _VAR_RE.sub(repl, s)
 

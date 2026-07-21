@@ -1,0 +1,287 @@
+================================================================================
+API TOOL - SCRIPT QUICK REFERENCE
+================================================================================
+Use these in the Pre-request Script or Tests tabs. Copy-paste as needed.
+All scripts are Python. print() output goes to logger.txt automatically.
+
+================================================================================
+COLLECTION VARIABLES
+================================================================================
+
+# Set a variable
+pm.collectionVariables.set("myVar", "myValue")
+
+# Get a variable
+val = pm.collectionVariables.get("myVar")
+
+# Remove a variable
+pm.collectionVariables.unset("myVar")
+
+# Check if variable exists
+if pm.collectionVariables.has("myVar"):
+    print("exists")
+
+================================================================================
+PRE-REQUEST: MODIFY REQUEST BEFORE SENDING
+================================================================================
+
+# Change URL dynamically
+pm.request.url = "https://api.example.com/v2/users"
+
+# Change method
+pm.request.method = "POST"
+
+# Add/modify headers
+pm.request.headers["Authorization"] = "Bearer " + pm.collectionVariables.get("token")
+pm.request.headers["X-Request-Id"] = str(__import__('uuid').uuid4())
+
+# Modify body
+import json
+body = json.loads(pm.request.body)
+body["timestamp"] = str(int(time.time()))
+pm.request.body = json.dumps(body)
+
+================================================================================
+TESTS: READ RESPONSE
+================================================================================
+
+# Get status code
+status = pm.response.status
+print(f"Status: {status}")
+
+# Get response body as text
+raw = pm.response.text
+
+# Parse JSON response (supports dot-access)
+data = pm.response.json()
+user_id = data.id
+user_name = data.user.name
+first_item = data.items[0].sku
+
+# Get response header
+content_type = pm.response.headers.get("Content-Type", "")
+session_id = pm.response.headers.get("X-Session-Id", "")
+
+================================================================================
+TESTS: ASSERTIONS
+================================================================================
+
+# Assert status code
+assert pm.response.status == 200, f"Expected 200, got {pm.response.status}"
+
+# Assert response contains a key
+data = pm.response.json()
+assert "userId" in data, "Missing userId in response"
+
+# Assert value matches
+assert data.status == "ACTIVE", f"Expected ACTIVE, got {data.status}"
+
+# Assert array not empty
+assert len(data.items) > 0, "Items array is empty"
+
+# Assert type
+assert isinstance(data.count, int), f"count should be int, got {type(data.count)}"
+
+================================================================================
+TESTS: EXTRACT & CHAIN (set vars for next request)
+================================================================================
+
+# Extract token from response body
+token = pm.response.json().accessToken
+pm.collectionVariables.set("authToken", token)
+
+# Extract from response header
+session = pm.response.headers.get("X-Session-Id", "")
+pm.collectionVariables.set("sessionId", session)
+
+# Extract nested value
+account_id = pm.response.json().data.account.id
+pm.collectionVariables.set("accountId", str(account_id))
+
+# Extract from array
+first_order = pm.response.json().orders[0].orderId
+pm.collectionVariables.set("orderId", str(first_order))
+
+================================================================================
+COMMON UTILITIES
+================================================================================
+
+# Generate UUID
+import uuid
+tracking_id = str(uuid.uuid4())
+pm.collectionVariables.set("trackingId", tracking_id)
+
+# Current timestamp (epoch)
+ts = str(int(time.time()))
+pm.collectionVariables.set("timestamp", ts)
+
+# Current date (ISO format)
+from datetime import datetime
+now = datetime.now().isoformat()
+pm.collectionVariables.set("currentDate", now)
+
+# Date in specific format
+today = datetime.now().strftime("%Y-%m-%d")
+pm.collectionVariables.set("today", today)
+
+# Random integer
+import random
+pm.collectionVariables.set("randomNum", str(random.randint(1000, 9999)))
+
+# Base64 encode
+import base64
+encoded = base64.b64encode(b"user:password").decode()
+pm.collectionVariables.set("basicAuth", encoded)
+
+# HMAC signature
+import hmac
+secret = b"my_secret_key"
+message = pm.request.url.encode()
+sig = hmac.new(secret, message, hashlib.sha256).hexdigest()
+pm.request.headers["X-Signature"] = sig
+
+# MD5 hash
+checksum = hashlib.md5(pm.request.body.encode()).hexdigest()
+pm.request.headers["Content-MD5"] = checksum
+
+================================================================================
+DATA PROCESSING (in Tests tab)
+================================================================================
+
+# Sum values from response array
+data = pm.response.json()
+total = sum(item.get("amount", 0) for item in data.get("charges", []))
+print(f"Total charges: {total}")
+
+# Count items matching a condition
+active_count = len([u for u in data.get("users", []) if u.get("status") == "ACTIVE"])
+print(f"Active users: {active_count}")
+
+# Convert epoch to readable date
+from datetime import datetime
+epoch = data.get("createdAt", 0)
+readable = datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")
+print(f"Created: {readable}")
+
+# Find specific item in array
+target = next((i for i in data.get("items", []) if i.get("sku") == "ABC123"), None)
+if target:
+    print(f"Found: {target}")
+
+# Pretty-print full response to logger
+print(json.dumps(pm.response.json(), indent=2))
+
+================================================================================
+CONDITIONAL LOGIC
+================================================================================
+
+# Set different vars based on status
+if pm.response.status == 200:
+    pm.collectionVariables.set("lastStatus", "success")
+elif pm.response.status == 401:
+    pm.collectionVariables.set("lastStatus", "auth_failed")
+else:
+    pm.collectionVariables.set("lastStatus", f"error_{pm.response.status}")
+
+# Skip extraction if field missing
+data = pm.response.json()
+if hasattr(data, "token") and data.token:
+    pm.collectionVariables.set("token", data.token)
+
+================================================================================
+FILE OPERATIONS (advanced)
+================================================================================
+
+# Write response to a file
+from pathlib import Path
+Path("last_response.json").write_text(json.dumps(pm.response.json(), indent=2))
+
+# Read a value from a file
+config = json.loads(Path("config.json").read_text())
+pm.collectionVariables.set("baseUrl", config["baseUrl"])
+
+# Append to a CSV log
+with open("results.csv", "a") as f:
+    f.write(f"{pm.response.status},{pm.response.json().get('id','')}\n")
+
+================================================================================
+REQUEST PAYLOAD SCHEMA VALIDATION (in Pre-request Script tab)
+================================================================================
+
+# Validates the request body against a JSON Schema file before sending.
+# Schema file location: artifacts/schemas/request_schema.txt
+# Paste your JSON Schema into that file, then use this script as-is.
+#
+# If validation fails:  a warning dialog appears and the request is BLOCKED.
+# If validation passes: a confirmation is printed to logger.txt.
+#
+# To use for a different schema, change the filename on the schema_path line.
+# The schema file must contain valid JSON Schema (Draft 2020-12 compatible).
+
+import json
+import sys
+from pathlib import Path
+
+# Resolve path to artifacts/schemas/request_schema.txt
+# Works regardless of working directory because __file__ anchors to src/
+_src_dir = Path(__file__).resolve().parent if '__file__' in dir() else Path(sys.argv[0]).resolve().parent
+_schema_path = _src_dir.parent / "artifacts" / "schemas" / "request_schema.txt"
+
+# Load schema
+if not _schema_path.exists():
+    raise Exception(
+        f"Schema file not found: {_schema_path}\n"
+        "Create artifacts/schemas/request_schema.txt and paste your JSON Schema into it."
+    )
+
+import validate_schema as vs
+
+_schema = json.loads(_schema_path.read_text(encoding="utf-8"))
+
+# Parse request body
+if not pm.request.body or not pm.request.body.strip():
+    raise Exception("Request body is empty — nothing to validate against schema.")
+
+_payload = json.loads(pm.request.body)
+
+# Run validation
+_errors = vs.validate_node(_payload, _schema, [], _schema)
+
+if _errors:
+    for _e in _errors:
+        print(f"SCHEMA ERROR: {_e}")
+    raise Exception(
+        f"Request payload failed schema validation ({len(_errors)} issue(s)). "
+        "See logger.txt for details."
+    )
+
+print(f"Payload schema validation passed. Schema: {_schema_path.name}")
+
+# ---- EXAMPLE: artifacts/schemas/request_schema.txt content ----
+# {
+#   "$schema": "https://json-schema.org/draft/2020-12/schema",
+#   "type": "object",
+#   "required": ["userId", "email", "amount"],
+#   "properties": {
+#     "userId":  { "type": "integer" },
+#     "email":   { "type": "string", "format": "email" },
+#     "amount":  { "type": "number", "minimum": 0 },
+#     "status":  { "type": "string", "enum": ["ACTIVE", "PENDING"] },
+#     "tags":    { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+#   },
+#   "additionalProperties": false
+# }
+
+================================================================================
+DYNAMIC VARIABLES (use in URL, Headers, Body — no script needed)
+================================================================================
+
+{{$randomUUID}}    -> fresh UUID v4 each time
+{{$guid}}          -> same as $randomUUID
+{{$timestamp}}     -> current epoch seconds
+{{$randomInt}}     -> random int 0-1000
+
+Example header value: {{$randomUUID}}
+Example URL: https://api.example.com/orders/{{orderId}}
+
+================================================================================

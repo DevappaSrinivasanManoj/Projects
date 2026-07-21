@@ -1,0 +1,501 @@
+================================================================================
+API TOOL - USER NOTES
+================================================================================
+A Postman-style desktop API testing tool built with Python + Tkinter.
+Standard-library-only for networking; no external dependencies required
+(optional: 'jsonschema' pip package for enhanced schema validation).
+
+--------------------------------------------------------------------------------
+LAUNCHING THE TOOL
+--------------------------------------------------------------------------------
+Run from the v27 folder:
+    python launcher.py
+
+Do NOT run gui_app.py or api_engine.py directly — launcher.py sets up the
+Python path so all internal imports resolve correctly.
+
+CLI mode (no GUI):
+    python src/api_engine.py --folder <path_to_working_folder>
+
+================================================================================
+LAYOUT OVERVIEW
+================================================================================
+Left panel   : Collection sidebar (tree with folders + requests)
+Right top    : Request builder (Method, Name, URL, tabs for Params/Headers/Body/
+               Pre-request Script/Tests)
+Right bottom : Response viewer (tabs for Body, Headers, Schema, Compare)
+Top bar      : Working folder path, SSL status, Redirect status, progress counter
+Menu bar     : File | Tools | Settings
+
+================================================================================
+WORKING FOLDER
+================================================================================
+The tool uses a "working folder" to store everything:
+  artifacts/                <- default working folder (auto-created next to src/)
+  artifacts/logger.txt      <- all requests + responses logged here
+  artifacts/session.jsonl   <- raw session history (JSONL format)
+  artifacts/temp.collection.vars.json  <- live collection variables (auto-saved)
+  artifacts/extractors.map.json        <- per-request extractor rules
+  artifacts/extractors.index.json      <- extractor index (GUI-managed)
+  artifacts/schemas/                   <- JSON schema files for validation
+  artifacts/*.postman_collection.json  <- exported collections land here
+
+Change folder: File -> Choose Working Folder...
+The logger, variables, and extractors all reload automatically on folder change.
+
+================================================================================
+MAKING A REQUEST
+================================================================================
+1. Select Method from the dropdown (GET/POST/PUT/PATCH/DELETE).
+2. Enter the URL (supports {{variable}} placeholders).
+3. Fill in Headers (one "Key: Value" per line, or JSON object).
+4. Fill in Body (raw text / JSON) in the Body tab.
+5. Click SEND (or press Enter after the URL field).
+
+The resolved URL (after variable substitution) is shown in the response log.
+The template URL (as typed) is stored in session history.
+
+================================================================================
+REQUEST TABS
+================================================================================
+PARAMS tab
+  - Visual key/value editor for URL query parameters.
+  - "Load from URL"  : parses existing ?key=value pairs from the URL field.
+  - "Apply to URL"   : writes all params back into the URL field.
+  - Switches to this tab automatically when you click the Params tab.
+
+HEADERS tab
+  - One header per line: "Key: Value"
+  - Alternating green/white row coloring for readability.
+  - Supports JSON object format: {"Content-Type": "application/json"}
+  - Comments: lines starting with # are ignored.
+
+BODY tab
+  - "Validate JSON"  : checks syntax only; shows ✅ or error message.
+  - "Pretty JSON"    : formats JSON with 2-space indent + syntax colors.
+                       If JSON has errors, still formats best-effort and
+                       highlights the error line in red.
+  - "Clear Body"     : empties the body text area.
+
+PRE-REQUEST SCRIPT tab
+  - Python code that runs BEFORE the request is sent.
+  - Has access to the 'pm' object (see SCRIPTING section).
+  - Can mutate pm.request.url, pm.request.method, pm.request.headers,
+    pm.request.body before the request fires.
+  - print() output is captured to logger.txt.
+
+TESTS tab
+  - Python code that runs AFTER the response is received.
+  - Has access to 'pm' object including pm.response.
+  - Use assert statements for test assertions.
+  - print() output is captured to logger.txt.
+  - Errors shown as a warning dialog; won't stop the app.
+
+================================================================================
+RESPONSE TABS
+================================================================================
+BODY tab
+  - Pretty-printed JSON response (4-space indent).
+  - Non-JSON responses shown as raw text.
+  - JSON keys highlighted blue, values highlighted green.
+  - Ctrl+Click any line -> copies pm.response.json().path to clipboard.
+    Label flashes "Copied: <path>" for 2.5 seconds as confirmation.
+
+HEADERS tab
+  - Response headers as pretty-printed JSON.
+
+SCHEMA tab
+  - Shows schema validation result when "Validate schema" checkbox is ON.
+  - ✅ VALID / ❌ N issue(s) with path-level detail.
+  - Auto-selects this tab if validation fails.
+
+COMPARE tab
+  - Shows JSON diff when "Compare" checkbox is ON.
+  - First response is stored. Second response is diffed against it.
+  - Reports: added/removed keys, type changes, value changes, array length changes.
+  - Auto-selects this tab if differences are found.
+
+================================================================================
+COLLECTION SIDEBAR
+================================================================================
+The left sidebar is a hierarchical tree supporting folders and requests.
+
+LOADING A COLLECTION
+  Button: "Load Postman Collection..."  (accepts Postman v2.1 JSON)
+  - Imports folder structure and all requests.
+  - Imports top-level collection variables into temp store.
+  - Per-request extractor rules (x-apitool-extract) are also loaded.
+
+ADDING A NEW REQUEST
+  Button: "+ New" -> clears fields for a fresh request.
+  Clicking "Send" on an unsaved request auto-adds it to the sidebar.
+  Right-click sidebar -> "New Request Here" to add inside a folder.
+
+FOLDERS
+  Right-click on empty area -> "New Folder"
+  Right-click on a folder   -> New Request Here / New Sub-Folder /
+                                Rename Folder / Delete Folder
+  "Expand All" / "Collapse All" buttons at top of sidebar.
+
+MANAGING REQUESTS
+  ↑ / ↓ buttons    : reorder selected request within its parent.
+  Delete button     : removes selected request or folder.
+  Right-click on request -> Duplicate / Move to Folder... / Delete
+
+RENAMING
+  Edit the Name field in the request builder, then click "Rename".
+  If Name is blank, the sidebar shows "METHOD URL" automatically.
+
+SAVING CURRENT STATE
+  Switching selection auto-saves current UI state to the active request.
+  On window close: prompted to save as a timestamped Postman collection.
+
+================================================================================
+CURL IMPORT / EXPORT
+================================================================================
+PASTE CURL
+  Button: "Paste cURL..."
+  - Opens a text area; paste any curl command.
+  - Click "Parse cURL" to populate Method, URL, Headers, Body.
+  - Supports: -X, -H, -d, --data, --data-raw, --data-binary, -F,
+              --url, -k, -L, and most standard curl flags.
+  - Backslash line-continuations are handled automatically.
+  - Times out after 5 seconds to prevent UI freeze on malformed input.
+
+COPY AS CURL
+  Button: "Copy as cURL"
+  - Builds a curl command from current Method, URL, Headers, Body.
+  - Collection variables are resolved before building the command.
+  - Copies to clipboard; shows confirmation dialog.
+
+================================================================================
+COLLECTION VARIABLES  ({{var}} placeholders)
+================================================================================
+Variables are stored in temp.collection.vars.json in the working folder.
+They are applied to URL, header values, and body text just before sending.
+
+EDITING VARIABLES
+  Menu: Tools -> Collection Variables...  (or button "Set Collection Variables")
+  - Shows all variables as "key: value" lines (one per line).
+  - Alternating row colors for readability.
+  - Click Save to persist; changes take effect on next Send.
+
+DYNAMIC VARIABLES (use directly in URL / Headers / Body, no setup needed)
+  {{$randomUUID}}  -> fresh UUID v4 each request
+  {{$guid}}        -> same as $randomUUID
+  {{$timestamp}}   -> current Unix epoch (seconds)
+  {{$randomInt}}   -> random integer 0-1000
+
+AUTOCOMPLETE
+  Type '{{' in any text field (URL, Headers, Body, Scripts) to trigger a
+  dropdown showing all available collection variables and dynamic variables.
+  Arrow keys to navigate, Enter or double-click to insert with closing '}}'.
+  Escape to dismiss.
+
+IMPORTING FROM POSTMAN COLLECTION
+  Loading a collection automatically imports top-level "variable" array
+  into the temp store. You'll see a count dialog if any were imported.
+
+================================================================================
+SCHEMA VALIDATION
+================================================================================
+1. Enable the "Validate schema" checkbox in the toolbar.
+2. Send a request.
+3. The Schema tab shows results after every response.
+
+HOW SCHEMAS ARE MATCHED
+  - URL path is converted to a canonical base name:
+      /api/users/123/orders -> "api_users_orders"  (numbers/UUIDs stripped)
+  - Tool looks for: artifacts/schemas/<base>_<status>.txt  (e.g., api_users_200.txt)
+    then falls back to: artifacts/schemas/<base>.txt
+  - Schema files must contain valid JSON Schema (JSON format, .txt extension).
+
+WRITING A SCHEMA FILE
+  - Store in artifacts/schemas/ with matching name (see above).
+  - Supports: type, required, properties, additionalProperties, $ref,
+              allOf/anyOf/oneOf, enum/const, string formats, number ranges,
+              array minItems/maxItems/uniqueItems, and more.
+  - If 'jsonschema' pip package is installed, it is used for richer validation.
+    Otherwise the built-in validator handles most common cases.
+
+See artifacts/schemas/api_E.txt for an example schema file.
+
+================================================================================
+RESPONSE COMPARISON (DIFF)
+================================================================================
+1. Enable the "Compare" checkbox.
+2. Send a request -> first response is stored silently.
+   Label shows: "Compare: First response stored. Send another to compare."
+3. Send a second request -> JSON diff is shown in the Compare tab.
+4. After comparing, the pair buffer resets (next send becomes the new "first").
+
+DIFF DETAIL LEVELS
+  - Added keys       : $.path.key: added (is <value>)
+  - Removed keys     : $.path.key: removed (was <value>)
+  - Value changed    : $.path.key: value changed (expected X, actual Y)
+  - Type changed     : $.path.key: type changed (expected string, actual integer)
+  - Array length     : $.arr: array length changed (expected 3, actual 5)
+
+NOTE: Compare is automatically paused during batch runs to avoid noise.
+It restores to its previous state after the batch completes.
+
+================================================================================
+BATCH / COLLECTION RUNS
+================================================================================
+ALL BUTTONS ARE IN THE SECOND BUTTON ROW BELOW THE URL BAR.
+
+RUN COLLECTION (ALL)
+  Runs every request in the loaded collection in series.
+  Prompts for optional delay between requests (milliseconds).
+
+RUN SELECTED...
+  Opens a checklist of all requests. Check/uncheck which to run.
+  Set optional delay. Click "Run Selected".
+
+RUN N TIMES...
+  Runs the entire collection N times in series.
+  Prompts for N and optional delay.
+
+RUN... (Generic Dialog)
+  "Same Request" mode:
+    - Series: sends current request N times with optional delay.
+    - Parallel: sends current request N times with a thread pool.
+      Set Workers = number of concurrent threads.
+  "CSV Data File" mode (Series only):
+    - Load a UTF-8 comma-delimited CSV with a header row.
+    - Column names become {{placeholders}} resolved in URL, Headers, Body.
+    - Unknown {{placeholders}} are left as-is (collection vars still apply).
+
+CANCEL RUN
+  Button: "Cancel Run" -> sets a cancel flag; in-progress request finishes
+  but no new requests are started.
+
+PROGRESS COUNTER
+  Shows "completed/total" in the top-right status bar during any batch run.
+
+================================================================================
+VARIABLE EXTRACTION (CHAINING REQUESTS)
+================================================================================
+This feature automatically captures values from responses and stores them as
+collection variables for use in subsequent requests.
+
+METHOD 1: GUI DIALOG
+  Button: "Set Collection Variables" (row 2, below URL)
+  - Requires a response to have been received first.
+  - Shows JSON path picker (all available paths) and header key list.
+  - Choose a path/header, give it a variable name, click Save.
+  - Rule is stored in extractors.index.json keyed by "METHOD URL".
+  - After every matching request, the value is auto-captured and stored.
+
+METHOD 2: POSTMAN IMPORT
+  Collections exported by this tool include "x-apitool-extract" on each item.
+  Re-importing the collection restores all extractor rules automatically.
+
+METHOD 3: TEST SCRIPTS (most flexible)
+  Use pm.collectionVariables.set() in the Tests tab (see SCRIPTING section).
+
+EXTRACTION RULE FORMAT (in extractors.index.json)
+  "GET https://api.example.com/users": [
+    {"name": "userId",    "from": "json",   "path": "$.data.id"},
+    {"name": "authToken", "from": "header", "key": "X-Auth-Token"}
+  ]
+
+================================================================================
+SCRIPTING (Pre-request Script & Tests tabs)
+================================================================================
+Language: Python 3. All scripts run with access to the 'pm' object.
+Also available in scope: json, base64, hashlib, time, re, uuid (via import).
+print() output is captured to logger.txt automatically.
+
+---- pm.request (mutable, use in Pre-request Script) ----
+  pm.request.url          string  - change the URL before sending
+  pm.request.method       string  - change the HTTP method
+  pm.request.headers      dict    - add/modify headers
+  pm.request.body         string  - modify the raw body text
+
+---- pm.response (read-only, use in Tests) ----
+  pm.response.status      int     - HTTP status code
+  pm.response.text        string  - raw response body as text
+  pm.response.json()      DotDict - parsed JSON body (dot-access supported)
+  pm.response.headers     DotDict - response headers (case-sensitive keys)
+  pm.response.code        int     - alias for .status
+
+  DotDict supports chained dot-access:
+    data = pm.response.json()
+    data.user.address.city       # nested keys
+    data.items[0].sku            # array indexing
+
+---- pm.collectionVariables ----
+  pm.collectionVariables.set("key", "value")   - save a variable
+  pm.collectionVariables.get("key")            - read a variable ("" if missing)
+  pm.collectionVariables.unset("key")          - delete a variable
+  pm.collectionVariables.has("key")            - True/False existence check
+
+---- Assertions (in Tests) ----
+  assert pm.response.status == 200, "Expected 200"
+  assert "id" in pm.response.json(), "Missing id field"
+  assert pm.response.json().status == "OK"
+
+See script_reference.txt in this folder for a full copy-paste reference.
+
+================================================================================
+EXPORT SESSION TO POSTMAN
+================================================================================
+Button (bottom-right of response panel) or File -> Export Session to Postman...
+
+1. Prompts for a collection name.
+2. Writes session.jsonl (flat backup) to working folder.
+3. Exports a full Postman v2.1 collection JSON preserving folder structure.
+4. Injects all current collection variables into the "variable" array.
+5. Embeds pre-request + test scripts as Postman event arrays.
+6. Embeds extractor rules as "x-apitool-extract" vendor fields (re-imported
+   by this tool; ignored by Postman).
+7. Output file: <WorkingFolder>/<CollectionName>.postman_collection.json
+
+AUTO-SAVE ON CLOSE
+  If a collection is loaded when you close the window, you are prompted:
+  - Yes    -> auto-saves as "AutoSave_YYYYMMDD_HHMMSS.postman_collection.json"
+  - No     -> closes without saving
+  - Cancel -> stays open
+
+================================================================================
+GLOBAL SETTINGS
+================================================================================
+Settings -> Toggle Disable SSL (global)
+  Disables SSL certificate verification (like Postman's "SSL certificate
+  verification OFF"). Status shown in top bar as "SSL verification: DISABLED".
+  Use for self-signed certs or development environments only.
+
+Settings -> Toggle Follow Redirects (global)
+  When OFF, HTTP 3xx redirects are NOT followed. Status shown in top bar.
+  Default: ON (redirects are followed).
+
+================================================================================
+FIND / SEARCH  (Ctrl+F)
+================================================================================
+Press Ctrl+F anywhere in the app to open the search bar.
+- If the Body/Payload editor is focused -> searches in the payload.
+- Otherwise -> searches in the active response tab (Body, Headers, etc.).
+- Real-time: results update as you type.
+- All matches highlighted in pale yellow; current match in bright yellow.
+- Prev / Next buttons to navigate between matches.
+- Match counter shows "N of M".
+- Close clears all highlights.
+
+================================================================================
+KEYBOARD SHORTCUTS
+================================================================================
+Ctrl+F          -> Open Find dialog (targets focused text area)
+Ctrl+Z          -> Undo (in all text areas and URL/Name fields)
+Ctrl+Y          -> Redo (in all text areas and URL/Name fields)
+Ctrl+Click      -> Copy JSON path (pm.response.json().path) from response body
+Double-Click    -> Select text inside quotes in any JSON widget
+Enter (URL bar) -> Not bound; use the Send button or add a shortcut if needed
+
+================================================================================
+LOGGING
+================================================================================
+Every request and response is appended to artifacts/logger.txt including:
+  - Full request (method, URL, headers, body)
+  - Full response (status, headers, body)
+  - Schema validation results (if enabled)
+  - JSON diff results (if Compare is enabled)
+  - Variable extractor captures
+  - Pre-request / Tests script output (print statements)
+
+Large response bodies are TRUNCATED in the UI (200,000 chars limit) but the
+full content is always written to logger.txt.
+
+================================================================================
+CLI MODE (api_engine.py)
+================================================================================
+Run without GUI for scripted / CI use:
+    python src/api_engine.py --folder <folder>
+
+Interactive prompts guide you through:
+  0  -> Custom request (creates url.txt, headers.txt, payload.txt)
+  1  -> Import cURL from curl.txt
+  2+ -> Select from loaded Postman collection items
+  C  -> Toggle Compare mode
+  V  -> View/edit collection variables inline
+
+After each request:
+  1 -> Export session as Postman collection + exit
+  2 -> Make another request
+  3 -> Exit without export
+
+================================================================================
+FILE STRUCTURE REFERENCE
+================================================================================
+v27/
+  launcher.py               <- ENTRY POINT: run this
+  script_reference.txt      <- Quick reference for pm.* scripting
+  notes.txt                 <- This file
+  src/
+    gui_app.py              <- Main GUI application (ApiGuiApp class)
+    api_engine.py           <- HTTP engine, curl parser, Postman parser,
+                               schema validation, diff, variable rendering
+    session_controller.py   <- Manages loaded request collection in memory
+    tree_sidebar.py         <- Hierarchical sidebar (folders + requests)
+    sidebar_manager.py      <- Syncs new/renamed requests to sidebar
+    collection_editor.py    <- Expand/Collapse/Move/Delete sidebar controls
+    batch_runner.py         <- All batch/collection run logic
+    curl_handler.py         <- cURL paste popup + copy-as-curl
+    diff_engine.py          <- Pure JSON diff engine (stdlib only)
+    export_handler.py       <- Export session to Postman collection
+    export_utils.py         <- Postman JSON builder (handles folder structure)
+    temp_var_store.py       <- Collection variable store + {{var}} renderer
+    pm_runtime.py           <- pm.* scripting context for Pre-request/Tests
+    autocomplete.py         <- {{variable}} autocomplete popup
+    json_path_picker.py     <- Ctrl+Click JSON path picker
+    response_formatter.py   <- Pretty-prints response body for UI display
+    search_manager.py       <- Ctrl+F find dialog
+    text_helpers.py         <- Undo/redo, smart double-click, best-effort JSON
+    validate_schema.py      <- JSON Schema validator (built-in + jsonschema)
+  artifacts/
+    schemas/                <- Put your JSON Schema .txt files here
+      api_E.txt             <- Example schema (Product object)
+    logger.txt              <- Auto-created; all request/response logs
+    session.jsonl           <- Auto-created; raw session history
+    temp.collection.vars.json  <- Auto-created; live collection variables
+    extractors.map.json     <- Auto-created; extractor rules (CLI)
+    extractors.index.json   <- Auto-created; extractor rules (GUI)
+    *.postman_collection.json  <- Exported collections land here
+
+================================================================================
+TIPS & GOTCHAS
+================================================================================
+1. Run launcher.py, not gui_app.py directly.
+
+2. Variables are resolved just-in-time before sending. Edit them via
+   Tools -> Collection Variables... and changes apply on the next Send
+   without reloading anything.
+
+3. If schema validation says "No schema file: tried ...", create the file
+   in artifacts/schemas/ with the matching name. Path segments that are
+   numbers, UUIDs, or {parameters} are automatically stripped.
+
+4. Compare mode stores the FIRST response and diffs with the SECOND.
+   After comparing, the buffer resets. Toggle off/on to start fresh.
+
+5. Batch runs automatically disable Compare to avoid false diffs.
+
+6. The "Set Collection Variables" button needs at least one completed
+   request to show response paths for selection.
+
+7. Scripts use Python syntax, not JavaScript. If pasting from Postman,
+   translate JS -> Python (e.g., const -> no declaration needed,
+   JSON.parse() -> json.loads(), console.log() -> print()).
+
+8. Pre-request script mutations to pm.request only affect the single Send
+   they precede. They are NOT persisted back to the collection.
+
+9. CSV batch runs accept any column name in the header row. Reference them
+   as {{columnName}} in URL/Headers/Body.
+
+10. Exporting always preserves the current folder structure from the sidebar.
+    Drag requests between folders before exporting to control output layout.
+
+================================================================================
+END OF NOTES
+================================================================================
