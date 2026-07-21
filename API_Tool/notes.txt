@@ -8,7 +8,7 @@ Standard-library-only for networking; no external dependencies required
 --------------------------------------------------------------------------------
 LAUNCHING THE TOOL
 --------------------------------------------------------------------------------
-Run from the v27 folder:
+Run from the folder:
     python launcher.py
 
 Do NOT run gui_app.py or api_engine.py directly — launcher.py sets up the
